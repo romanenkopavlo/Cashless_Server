@@ -5,6 +5,28 @@ import mySqlPool from "../config/db.js";
 
 const users = [];
 
+export const signup = async (req, res) => {
+    const {name, surname, login, password, cardNumber} = req.body;
+    const data = await mySqlPool.query('SELECT * FROM utilisateurs u WHERE u.login = ?', [login]);
+    const isUserExists = data[0][0]
+
+    if (!isUserExists) {
+        const nomPrivilege = "Visiteur"
+        const getPrivilege = await mySqlPool.query('SELECT * FROM privileges p WHERE p.nom = ?', [nomPrivilege])
+        const idPrivilege = getPrivilege[0][0].idprivilege
+        console.log("privilege: " + idPrivilege)
+        if (idPrivilege) {
+            const result = await mySqlPool.query(`INSERT INTO utilisateurs (nom, prenom, login, password, privileges_idprivilege) VALUES (?, ?, ?, ?, ?)`, [surname, name, login, password, idPrivilege]);
+            if (!result) {
+                res.status(401).json({message: "L'erreur lors de l'ajout dans la base de données"})
+            }
+        }
+        return res.status(200).json({message: "Le compte a été créé!"})
+    } else {
+        return res.status(401).json({message: `L'utilisateur avec login ${login} déja existe}`})
+    }
+}
+
 export const login = async (req, res) => {
     const {username, password} = req.body;
     const data = await mySqlPool.query('SELECT u.*, p.nom AS role FROM utilisateurs u JOIN privileges p ON u.privileges_idprivilege = p.idprivilege WHERE u.login = ? AND u.password = ?', [username, password])
@@ -13,7 +35,7 @@ export const login = async (req, res) => {
     console.log(userDB)
 
     if (userDB) {
-        const user = new User(userDB.idutilisateur, userDB.uuid, userDB.nom, userDB.prenom, userDB.login, userDB.password, userDB.nom);
+        const user = new User(userDB.idutilisateur, userDB.uuid, userDB.nom, userDB.prenom, userDB.login, userDB.password, userDB.role);
 
         const tokens = generateTokens(user);
         user.setRefreshToken(tokens.refreshToken);
