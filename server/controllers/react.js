@@ -7,10 +7,12 @@ const users = [];
 
 export const signup = async (req, res) => {
     const {name, surname, login, password, cardNumber} = req.body;
-    const data = await mySqlPool.query('SELECT * FROM utilisateurs u WHERE u.login = ?', [login]);
-    const isUserExists = data[0][0]
+    const dataUser = await mySqlPool.query('SELECT * FROM utilisateurs u WHERE u.login = ?', [login]);
+    const dataCard = await mySqlPool.query('SELECT * FROM cartes c WHERE c.numero = ?', [cardNumber]);
+    const isUserExists = dataUser[0][0]
+    const isCardExists = dataCard[0][0]
 
-    if (!isUserExists) {
+    if (!isUserExists && !isCardExists) {
         const nomPrivilege = "Visiteur"
         const getPrivilege = await mySqlPool.query('SELECT * FROM privileges p WHERE p.nom = ?', [nomPrivilege])
         const idPrivilege = getPrivilege[0][0].idprivilege
@@ -23,7 +25,11 @@ export const signup = async (req, res) => {
         }
         return res.status(200).json({message: "Le compte a été créé!"})
     } else {
-        return res.status(401).json({message: `L'utilisateur avec login ${login} déja existe}`})
+        if (isUserExists) {
+            return res.status(401).json({message: `L'utilisateur avec login ${login} déja existe}`})
+        } else {
+            return res.status(401).json({message: `La carte avec numéro ${cardNumber} déja existe}`})
+        }
     }
 }
 
