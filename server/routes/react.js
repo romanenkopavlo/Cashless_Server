@@ -8,7 +8,7 @@ routerReact.post('/login', login);
 routerReact.post('/signup', signup);
 routerReact.post('/addCard', addCard);
 routerReact.get('/refreshToken', getNewAccessToken);
-routerReact.get('/logout', authenticateJWT, logout);
+routerReact.get('/logout', logout);
 routerReact.get('/verifyBalance', authenticateJWT, verifyBalance);
 
 export default routerReact;
