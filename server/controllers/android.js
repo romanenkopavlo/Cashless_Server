@@ -8,7 +8,8 @@ export const login = (req, res) => {
     console.log(login, mdp)
     const uuid = crypto.randomUUID()
     if (login === "admin" && mdp === "admin") {
-        const user = new User(1, uuid, login, mdp, "admin")
+        console.log("tu passes ici")
+        const user = new User(1, uuid, "Quirin", "Robin", "admin", "admin", "Admin")
         const tokens = generateTokens(user);
         user.setRefreshToken(tokens.refreshToken);
         users.push(user);
@@ -48,8 +49,21 @@ export const checkCard = (req, res) => {
     console.log(tag)
     const regex = /^([0-9A-Fa-f]{2}:){6}[0-9A-Fa-f]{2}$/
     if (regex.test(tag)) {
-        res.status(200).json({message: 'Valid card number'});
+        res.status(200).json({solde: 800000.5, approved: true, name: "Robin"});
     } else {
-        res.status(401).json({message: 'Invalid card number'});
+        res.status(401).json({solde: 0.0, approved: false, name: "Robin"});
+    }
+}
+
+export const crediter = (req, res) => {
+    const {amount, tag} = req.body;
+    console.log("amount " + amount)
+    console.log("tag " + tag)
+    console.log(tag)
+    const regex = /^([0-9A-Fa-f]{2}:){6}[0-9A-Fa-f]{2}$/
+    if (regex.test(tag)) {
+        res.status(200).json({solde: 800000.5, approved: true, name: "Robin"});
+    } else {
+        res.status(401).json({solde: 0.0, approved: false, name: "Robin"});
     }
 }
