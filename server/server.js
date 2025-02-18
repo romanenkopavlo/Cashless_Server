@@ -30,6 +30,10 @@ app.listen(port, () => {
     console.log(`Lancé sur le http://localhost:${port}`);
 });
 
+console.log('mysql host: ', process.env.DB_HOST);
+console.log('mysql user: ', process.env.DB_USER);
+console.log('mysql database: ', process.env.DB_DATABASE);
+
 mysqlPool.query('SELECT 1').then(() => {
     console.log('MysqlPool query returning it\'s ok ');
 }).catch((err) => {
