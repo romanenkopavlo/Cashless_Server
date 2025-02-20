@@ -11,7 +11,9 @@ import mysqlPool from "./config/db.js";
 const app = express();
 const port = process.env.PORT || 5000;
 const corsOption = {
-    origin: 'http://localhost:5173',
+    origin: process.env.NODE_ENV === "production"
+        ? process.env.CORS_ORIGIN_PROD
+        : process.env.CORS_ORIGIN_DEV,
     credentials: true
 }
 
