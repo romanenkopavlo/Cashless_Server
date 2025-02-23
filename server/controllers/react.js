@@ -6,7 +6,7 @@ import mySqlPool from "../config/db.js";
 const users = [];
 
 export const signup = async (req, res) => {
-    const {name, surname, login, password, cardNumber} = req.body;
+    const {name, surname, login, role, password, cardNumber} = req.body;
     const resultUser = await mySqlPool.query('SELECT * FROM utilisateurs u WHERE u.login = ?', [login]);
     const resultCard = await mySqlPool.query('SELECT * FROM cartes c WHERE c.numero = ?', [cardNumber]);
 
@@ -25,8 +25,7 @@ export const signup = async (req, res) => {
     }
 
     if (!user && !userIDCard) {
-        const nomPrivilege = "Visiteur"
-        const getPrivilege = await mySqlPool.query('SELECT * FROM privileges p WHERE p.nom = ?', [nomPrivilege])
+        const getPrivilege = await mySqlPool.query('SELECT * FROM privileges p WHERE p.nom = ?', [role])
         const idPrivilege = getPrivilege[0][0].idprivilege
         console.log("privilege: " + idPrivilege)
         if (idPrivilege) {
@@ -145,6 +144,20 @@ export const getCardData = async (req, res) => {
     } else {
         res.status(200).json({numero: null, montant: null})
     }
+}
+
+export const getTransactions = async (req, res) => {
+    const {cardNumber} = req.body
+    console.log("card number is " + cardNumber)
+    const [transactions] = await mySqlPool.query('SELECT t.idtransaction, t.date, t.montant AS montant_transaction, o.type, s.nom AS nom_stand FROM transactions t JOIN cartes c ON t.cartes_idcarte = c.idcarte JOIN operations o ON t.operations_idoperation = o.idoperation JOIN affectations a ON t.affectations_idaffectation = a.idaffectation JOIN stands s ON a.stands_idstand = s.idstand WHERE c.numero = ?', [cardNumber])
+
+    console.log(transactions)
+
+    if (transactions.length === 0) {
+        return res.status(404).json({ message: "Aucune transaction trouvée" });
+    }
+
+    res.json(transactions);
 }
 
 export const addCard = async (req, res) => {
