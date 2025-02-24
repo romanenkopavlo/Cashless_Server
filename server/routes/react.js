@@ -22,5 +22,4 @@ routerReact.post('/addCard', authenticateJWT, addCard);
 routerReact.post('/getTransactions', authenticateJWT, getTransactions);
 routerReact.get('/getCardData', authenticateJWT, getCardData);
 routerReact.get('/verifyBalance', authenticateJWT, verifyBalance);
-
 export default routerReact;

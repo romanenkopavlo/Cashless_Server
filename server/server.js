@@ -7,6 +7,7 @@ import cookieParser from "cookie-parser";
 import routerReact from './routes/react.js';
 import routerAndroid from './routes/android.js';
 import mysqlPool from "./config/db.js";
+import routerStands from "./routes/react/admin/stands.js";
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -20,6 +21,7 @@ app.use(express.json());
 app.use(cookieParser());
 
 app.use('/api/auth', routerReact);
+app.use('/api/admin/stands', routerStands);
 app.use('/api/android', routerAndroid);
 
 app.get('/', (req, res) => {
