@@ -59,9 +59,9 @@ export const updateStand = async (req, res) => {
     } else {
         const result = await mySqlPool.query(`INSERT INTO categories (nom) VALUES (?)`, [nom_categorie]);
         const categoryId = result[0].insertId || result[0].id;
-        const resultStandInsert = await mySqlPool.query(`UPDATE stands SET nom = ?, solde = ?, categorie_id = ? WHERE id = ?`, [nom_stand, solde, categoryId, id_stand]);
+        const resultStandUpdate = await mySqlPool.query(`UPDATE stands SET nom = ?, solde = ?, categorie_id = ? WHERE id = ?`, [nom_stand, solde, categoryId, id_stand]);
 
-        if (!result || !resultStandInsert) {
+        if (!result || !resultStandUpdate) {
             return res.status(401).json({message: "L'erreur lors de la modification dans la base de données"})
         }
     }
