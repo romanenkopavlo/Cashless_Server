@@ -30,7 +30,7 @@ export const createStand = async (req, res) => {
         const result = await mySqlPool.query(`INSERT INTO categories (nom) VALUES (?)`, [nom_categorie]);
         console.log(result[0])
         const categoryId = result[0].insertId || result[0].id;
-        const resultStandInsert = await mySqlPool.query(`INSERT INTO stands (nom, solde, categorie_id) VALUES (?, ?, ?)`, [nom_categorie, solde, categoryId]);
+        const resultStandInsert = await mySqlPool.query(`INSERT INTO stands (nom, solde, categorie_id) VALUES (?, ?, ?)`, [nom_stand, solde, categoryId]);
 
         if (!result || !resultStandInsert) {
             return res.status(401).json({message: "L'erreur lors de l'ajout dans la base de données"})
