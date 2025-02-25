@@ -1,8 +1,11 @@
 import mySqlPool from "../../../../config/db.js";
 
 export const getFestivaliers = async (req, res) => {
-    const nomPrivilege = "Visiteur"
-    const [festivaliers] = await mySqlPool.query('SELECT u.id, u.nom, u.prenom, u.login AS username FROM utilisateurs u JOIN privileges p ON u.privilege_id = p.id WHERE p.nom = ?', [nomPrivilege])
+    const nomPrivilege = "Visiteur";
+
+    console.log("Dans le getFestivaliers")
+
+    const [festivaliers] = await mySqlPool.query('SELECT u.id, u.nom, u.prenom, u.login AS login FROM utilisateurs u JOIN privileges p ON u.privilege_id = p.id WHERE p.nom = ?', [nomPrivilege])
 
     if (festivaliers.length === 0) {
         return res.status(404).json({ message: "Aucun festivalier trouvé" });
@@ -25,7 +28,12 @@ export const createFestivalier = async (req, res) => {
         return res.status(401).json({message: "L'erreur lors de l'ajout dans la base de données"})
     }
 
-    return res.status(200).json({message: "Le festivalier a été ajouté"})
+    const userID = resultInsert[0].insertId || resultInsert[0].id;
+    const [newFestivalier] = await mySqlPool.query('SELECT * FROM utilisateurs WHERE id = ?', [userID]);
+
+    console.log(newFestivalier[0])
+
+    return res.status(200).json({message: "Le festivalier a été ajouté", newFestivalier: newFestivalier[0] || null});
 }
 
 export const updateFestivalier = async (req, res) => {
@@ -41,7 +49,11 @@ export const updateFestivalier = async (req, res) => {
         return res.status(401).json({message: "L'erreur lors de la modification dans la base de données"})
     }
 
-    return res.status(200).json({message: "Le festivalier a été modifié"})
+    const [updatedFestivalier] = await mySqlPool.query('SELECT * FROM utilisateurs WHERE id = ?', [id_festivalier]);
+
+    console.log(updatedFestivalier[0])
+
+    return res.status(200).json({message: "Le festivalier a été modifié", updatedFestivalier: updatedFestivalier[0] || null})
 }
 
 export const deleteFestivalier = async (req, res) => {

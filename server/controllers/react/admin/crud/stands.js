@@ -3,6 +3,8 @@ import mySqlPool from "../../../../config/db.js";
 export const getStands = async (req, res) => {
     const [stands] = await mySqlPool.query('SELECT s.id AS id_stand, s.nom AS nom_stand, s.solde, cat.nom AS nom_categorie FROM stands s JOIN categories cat ON s.categorie_id = cat.id')
 
+    console.log("Dans le getStands")
+
     if (stands.length === 0) {
         return res.status(404).json({ message: "Aucun stand trouvé" });
     }
@@ -20,8 +22,10 @@ export const createStand = async (req, res) => {
     const resultCategory = await mySqlPool.query('SELECT * FROM categories WHERE categories.nom = ?', [nom_categorie])
     const category = resultCategory[0][0]
 
+    let resultInsert
+
     if (category) {
-        const resultInsert = await mySqlPool.query(`INSERT INTO stands (nom, solde, categorie_id) VALUES (?, ?, ?)`, [nom_stand, solde, category.id])
+        resultInsert = await mySqlPool.query(`INSERT INTO stands (nom, solde, categorie_id) VALUES (?, ?, ?)`, [nom_stand, solde, category.id])
 
         if (!resultInsert) {
             return res.status(401).json({message: "L'erreur lors de l'ajout dans la base de données"})
@@ -30,14 +34,19 @@ export const createStand = async (req, res) => {
         const result = await mySqlPool.query(`INSERT INTO categories (nom) VALUES (?)`, [nom_categorie]);
         console.log(result[0])
         const categoryId = result[0].insertId || result[0].id;
-        const resultStandInsert = await mySqlPool.query(`INSERT INTO stands (nom, solde, categorie_id) VALUES (?, ?, ?)`, [nom_stand, solde, categoryId]);
+        resultInsert = await mySqlPool.query(`INSERT INTO stands (nom, solde, categorie_id) VALUES (?, ?, ?)`, [nom_stand, solde, categoryId]);
 
-        if (!result || !resultStandInsert) {
+        if (!result || !resultInsert) {
             return res.status(401).json({message: "L'erreur lors de l'ajout dans la base de données"})
         }
     }
 
-    return res.status(200).json({message: "Le stand a ete ajote"})
+    const standID = resultInsert[0].insertId || resultInsert[0].id;
+    const [newStand] = await mySqlPool.query('SELECT s.id AS id_stand, s.nom AS nom_stand, s.solde, cat.nom AS nom_categorie FROM stands s JOIN categories cat ON s.categorie_id = cat.id WHERE s.id = ?', [standID])
+
+    console.log(newStand[0])
+
+    return res.status(200).json({message: "Le stand a ete ajote", newStand: newStand[0] || null})
 }
 
 export const updateStand = async (req, res) => {
@@ -50,23 +59,29 @@ export const updateStand = async (req, res) => {
     const resultCategory = await mySqlPool.query('SELECT * FROM categories WHERE categories.nom = ?', [nom_categorie])
     const category = resultCategory[0][0]
 
-    if (category) {
-        const resultInsert = await mySqlPool.query(`UPDATE stands SET nom = ?, solde = ?, categorie_id = ? WHERE id = ?`, [nom_stand, solde, category.id, id_stand])
+    let resultUpdate;
 
-        if (!resultInsert) {
-            return res.status(401).json({message: "L'erreur lors de l'ajout dans la base de données"})
+    if (category) {
+        resultUpdate = await mySqlPool.query(`UPDATE stands SET nom = ?, solde = ?, categorie_id = ? WHERE id = ?`, [nom_stand, solde, category.id, id_stand])
+
+        if (!resultUpdate) {
+            return res.status(401).json({message: "L'erreur lors de la modification dans la base de données"})
         }
     } else {
         const result = await mySqlPool.query(`INSERT INTO categories (nom) VALUES (?)`, [nom_categorie]);
         const categoryId = result[0].insertId || result[0].id;
-        const resultStandUpdate = await mySqlPool.query(`UPDATE stands SET nom = ?, solde = ?, categorie_id = ? WHERE id = ?`, [nom_stand, solde, categoryId, id_stand]);
+        resultUpdate = await mySqlPool.query(`UPDATE stands SET nom = ?, solde = ?, categorie_id = ? WHERE id = ?`, [nom_stand, solde, categoryId, id_stand]);
 
-        if (!result || !resultStandUpdate) {
+        if (!result || !resultUpdate) {
             return res.status(401).json({message: "L'erreur lors de la modification dans la base de données"})
         }
     }
 
-    return res.status(200).json({message: "Le stand a ete modifie"})
+    const [updatedStand] = await mySqlPool.query('SELECT s.id AS id_stand, s.nom AS nom_stand, s.solde, cat.nom AS nom_categorie FROM stands s JOIN categories cat ON s.categorie_id = cat.id WHERE s.id = ?', [id_stand]);
+
+    console.log(updatedStand[0])
+
+    return res.status(200).json({message: "Le stand a ete modifie", updatedStand: updatedStand[0] || null})
 }
 
 export const deleteStand = async (req, res) => {
