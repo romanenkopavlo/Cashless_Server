@@ -7,13 +7,13 @@ import cookieParser from "cookie-parser";
 import routerReact from './routes/react.js';
 import routerAndroid from './routes/android.js';
 import mysqlPool from "./config/db.js";
+import routerStands from "./routes/react/admin/stands.js";
+import routerFestivaliers from "./routes/react/admin/festivaliers.js";
 
 const app = express();
 const port = process.env.PORT || 5000;
 const corsOption = {
-    origin: process.env.NODE_ENV === "production"
-        ? process.env.CORS_ORIGIN_PROD
-        : process.env.CORS_ORIGIN_DEV,
+    origin: process.env.CORS_ORIGIN,
     credentials: true
 }
 
@@ -22,6 +22,8 @@ app.use(express.json());
 app.use(cookieParser());
 
 app.use('/api/auth', routerReact);
+app.use('/api/admin/stands', routerStands);
+app.use('/api/admin/festivaliers', routerFestivaliers);
 app.use('/api/android', routerAndroid);
 
 app.get('/', (req, res) => {

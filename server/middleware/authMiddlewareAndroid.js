@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 
-export const authenticateJWTAndroid = (req, res, next) => {
+export const authenticateAndroidJWT = (req, res, next) => {
     console.log(req.headers)
     const authHeader = req.headers['authorization'];
     const cookieHeader = req.headers['cookie'];

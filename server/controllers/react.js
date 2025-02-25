@@ -6,7 +6,7 @@ import mySqlPool from "../config/db.js";
 const users = [];
 
 export const signup = async (req, res) => {
-    const {name, surname, login, password, cardNumber} = req.body;
+    const {name, surname, login, role, password, cardNumber} = req.body;
     const resultUser = await mySqlPool.query('SELECT * FROM utilisateurs u WHERE u.login = ?', [login]);
     const resultCard = await mySqlPool.query('SELECT * FROM cartes c WHERE c.numero = ?', [cardNumber]);
 
@@ -14,10 +14,8 @@ export const signup = async (req, res) => {
     const card = resultCard[0][0]
 
     let userIDCard;
-    console.log(cardNumber)
     if (card) {
-        userIDCard = card.utilisateurs_idutilisateur
-        console.log("user with id " + userIDCard)
+        userIDCard = card.utilisateur_id
     } else {
         if (!(cardNumber.length === 0)) {
             return res.status(401).json({message: `La carte avec numéro ${cardNumber} n'existe pas`})
@@ -25,16 +23,14 @@ export const signup = async (req, res) => {
     }
 
     if (!user && !userIDCard) {
-        const nomPrivilege = "Visiteur"
-        const getPrivilege = await mySqlPool.query('SELECT * FROM privileges p WHERE p.nom = ?', [nomPrivilege])
-        const idPrivilege = getPrivilege[0][0].idprivilege
-        console.log("privilege: " + idPrivilege)
+        const getPrivilege = await mySqlPool.query('SELECT * FROM privileges p WHERE p.nom = ?', [role])
+        const idPrivilege = getPrivilege[0][0].id
         if (idPrivilege) {
-            const resultInsert = await mySqlPool.query(`INSERT INTO utilisateurs (nom, prenom, login, password, privileges_idprivilege) VALUES (?, ?, ?, ?, ?)`, [surname, name, login, password, idPrivilege]);
+            const resultInsert = await mySqlPool.query(`INSERT INTO utilisateurs (nom, prenom, login, password, privilege_id) VALUES (?, ?, ?, ?, ?)`, [surname, name, login, password, idPrivilege]);
             const resultUser = await mySqlPool.query(`SELECT * FROM utilisateurs u WHERE u.login = ?`, [login])
             const user = resultUser[0][0]
             const userID = user.idutilisateur
-            const resultUpdate = await mySqlPool.query(`UPDATE cartes SET utilisateurs_idutilisateur = ? WHERE numero = ?`, [userID, cardNumber])
+            const resultUpdate = await mySqlPool.query(`UPDATE cartes SET utilisateur_id = ? WHERE numero = ?`, [userID, cardNumber])
             if (!resultInsert || !resultUpdate) {
                 return res.status(401).json({message: "L'erreur lors de l'ajout dans la base de données"})
             }
@@ -51,13 +47,13 @@ export const signup = async (req, res) => {
 
 export const login = async (req, res) => {
     const {username, password} = req.body;
-    const dataUser = await mySqlPool.query('SELECT u.*, p.nom AS role FROM utilisateurs u JOIN privileges p ON u.privileges_idprivilege = p.idprivilege WHERE u.login = ? AND u.password = ?', [username, password])
+    const dataUser = await mySqlPool.query('SELECT u.*, p.nom AS role FROM utilisateurs u JOIN privileges p ON u.privilege_id = p.id WHERE u.login = ? AND u.password = ?', [username, password])
     const userDB = dataUser[0][0]
 
     console.log(userDB)
 
     if (userDB) {
-        const user = new User(userDB.idutilisateur, userDB.uuid, userDB.nom, userDB.prenom, userDB.login, userDB.password, userDB.role);
+        const user = new User(userDB.id, userDB.uuid, userDB.nom, userDB.prenom, userDB.login, userDB.password, userDB.role);
         const tokens = generateTokens(user);
         user.setRefreshToken(tokens.refreshToken);
         users.push(user);
@@ -99,8 +95,8 @@ export const getNewAccessToken = async (req, res) => {
         const payload = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
         payload.exp = payload.exp - (Date.now() / 1000);
         console.log(payload)
-        const newAccessToken = jwt.sign({id: payload.id, username: payload.username, role: payload.role}, process.env.ACCESS_TOKEN_SECRET, {expiresIn: process.env.ACCESS_TOKEN_EXPIRATION})
-        const newRefreshToken = jwt.sign({id: payload.id, uuid: payload.uuid, username: payload.username, role: payload.role}, process.env.REFRESH_TOKEN_SECRET, {expiresIn: `${payload.exp}s`});
+        const newAccessToken = jwt.sign({id: payload.id, login: payload.login, nom: payload.nom, prenom: payload.prenom, role: payload.role}, process.env.ACCESS_TOKEN_SECRET, {expiresIn: process.env.ACCESS_TOKEN_EXPIRATION})
+        const newRefreshToken = jwt.sign({id: payload.id, uuid: payload.uuid, login: payload.login, nom: payload.nom, prenom: payload.prenom, role: payload.role}, process.env.REFRESH_TOKEN_SECRET, {expiresIn: `${payload.exp}s`});
 
         user.setRefreshToken(newRefreshToken);
 
@@ -121,24 +117,20 @@ export const getNewAccessToken = async (req, res) => {
 }
 
 export const verifyBalance = async (req, res) => {
-    console.log(req.user)
     const {role} = req.user;
-    console.log("role: " + role);
-    console.log("here")
 
     if (role === "admin") {
         res.json({balance: 3000})
     } else {
-        console.log("dans else")
         res.status(401).json({message: 'Invalid role'});
     }
 }
 
 export const getCardData = async (req, res) => {
-    const {username} = req.user
-    const resultUser = await mySqlPool.query('SELECT * FROM utilisateurs u WHERE u.login = ?', [username])
+    const {login} = req.user
+    const resultUser = await mySqlPool.query('SELECT * FROM utilisateurs u WHERE u.login = ?', [login])
     const userDB = resultUser[0][0]
-    const resultCard = await mySqlPool.query('SELECT * FROM cartes c WHERE c.utilisateurs_idutilisateur = ?', [userDB.idutilisateur])
+    const resultCard = await mySqlPool.query('SELECT * FROM cartes c WHERE c.utilisateur_id = ?', [userDB.id])
     const cardDB = resultCard[0][0]
     if (cardDB) {
         res.status(200).json({numero: cardDB.numero, montant: cardDB.montant})
@@ -147,17 +139,31 @@ export const getCardData = async (req, res) => {
     }
 }
 
+export const getTransactions = async (req, res) => {
+    const {cardNumber} = req.body
+    console.log("card number is " + cardNumber)
+    const [transactions] = await mySqlPool.query('SELECT t.id AS id_transaction, t.date, t.montant AS montant_transaction, o.type, s.nom AS nom_stand FROM transactions t JOIN cartes c ON t.carte_id = c.id JOIN operations o ON t.operation_id = o.id JOIN affectations a ON t.affectation_id = a.id JOIN stands s ON a.stand_id = s.id WHERE c.numero = ?', [cardNumber])
+
+    console.log(transactions)
+
+    if (transactions.length === 0) {
+        return res.status(404).json({ message: "Aucune transaction trouvée" });
+    }
+
+    res.json(transactions);
+}
+
 export const addCard = async (req, res) => {
-    const {username} = req.user;
+    const {login} = req.user;
     const {cardNumber} = req.body;
     const resultCard = await mySqlPool.query('SELECT * FROM cartes WHERE numero = ?', cardNumber)
     const card = resultCard[0][0]
 
     if (card) {
-        if (!card.utilisateurs_idutilisateur) {
-            const resultUser = await mySqlPool.query('SELECT * FROM utilisateurs WHERE login = ?', username)
+        if (!card.utilisateur_id) {
+            const resultUser = await mySqlPool.query('SELECT * FROM utilisateurs WHERE login = ?', login)
             const user = resultUser[0][0]
-            const resultCardUpdate = await mySqlPool.query(`UPDATE cartes SET utilisateurs_idutilisateur = ? WHERE numero = ?`, [user.idutilisateur, cardNumber])
+            const resultCardUpdate = await mySqlPool.query(`UPDATE cartes SET utilisateur_id = ? WHERE numero = ?`, [user.id, cardNumber])
             if (resultCardUpdate) {
                 return res.status(200).json({numero: card.numero, montant: card.montant})
             } else {
