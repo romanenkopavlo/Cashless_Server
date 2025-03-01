@@ -73,8 +73,8 @@ const verifyFestivalierCreate = async (username) => {
 }
 
 const verifyFestivalierUpdate = async (id_festivalier, username) => {
-    const resultStand = await mySqlPool.query('SELECT * FROM utilisateurs WHERE login = ?', [username])
-    const festivalier = resultStand[0][0]
+    const resultUser = await mySqlPool.query('SELECT * FROM utilisateurs WHERE login = ?', [username])
+    const festivalier = resultUser[0][0]
     if (festivalier) {
         return id_festivalier !== festivalier.id;
     }

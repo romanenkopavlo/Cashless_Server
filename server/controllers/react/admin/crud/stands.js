@@ -1,7 +1,7 @@
 import mySqlPool from "../../../../config/db.js";
 
 export const getStands = async (req, res) => {
-    const [stands] = await mySqlPool.query('SELECT s.id AS id_stand, s.nom AS nom_stand, s.solde, cat.nom AS nom_categorie FROM stands s JOIN categories cat ON s.categorie_id = cat.id')
+    const [stands] = await mySqlPool.query('SELECT s.id AS id_stand, s.nom AS nom_stand, s.solde, cat.nom AS nom_categorie FROM stands s LEFT JOIN categories cat ON s.categorie_id = cat.id')
 
     console.log("Dans le getStands")
 
@@ -22,23 +22,10 @@ export const createStand = async (req, res) => {
     const resultCategory = await mySqlPool.query('SELECT * FROM categories WHERE categories.nom = ?', [nom_categorie])
     const category = resultCategory[0][0]
 
-    let resultInsert
+    const resultInsert = await mySqlPool.query(`INSERT INTO stands (nom, solde, categorie_id) VALUES (?, ?, ?)`, [nom_stand, solde, category.id])
 
-    if (category) {
-        resultInsert = await mySqlPool.query(`INSERT INTO stands (nom, solde, categorie_id) VALUES (?, ?, ?)`, [nom_stand, solde, category.id])
-
-        if (!resultInsert) {
-            return res.status(401).json({message: "L'erreur lors de l'ajout dans la base de données"})
-        }
-    } else {
-        const result = await mySqlPool.query(`INSERT INTO categories (nom) VALUES (?)`, [nom_categorie]);
-        console.log(result[0])
-        const categoryId = result[0].insertId || result[0].id;
-        resultInsert = await mySqlPool.query(`INSERT INTO stands (nom, solde, categorie_id) VALUES (?, ?, ?)`, [nom_stand, solde, categoryId]);
-
-        if (!result || !resultInsert) {
-            return res.status(401).json({message: "L'erreur lors de l'ajout dans la base de données"})
-        }
+    if (!resultInsert) {
+        return res.status(401).json({message: "L'erreur lors de l'ajout dans la base de données"})
     }
 
     const standID = resultInsert[0].insertId || resultInsert[0].id;
@@ -59,22 +46,10 @@ export const updateStand = async (req, res) => {
     const resultCategory = await mySqlPool.query('SELECT * FROM categories WHERE categories.nom = ?', [nom_categorie])
     const category = resultCategory[0][0]
 
-    let resultUpdate;
+    const resultUpdate = await mySqlPool.query(`UPDATE stands SET nom = ?, solde = ?, categorie_id = ? WHERE id = ?`, [nom_stand, solde, category.id, id_stand])
 
-    if (category) {
-        resultUpdate = await mySqlPool.query(`UPDATE stands SET nom = ?, solde = ?, categorie_id = ? WHERE id = ?`, [nom_stand, solde, category.id, id_stand])
-
-        if (!resultUpdate) {
-            return res.status(401).json({message: "L'erreur lors de la modification dans la base de données"})
-        }
-    } else {
-        const result = await mySqlPool.query(`INSERT INTO categories (nom) VALUES (?)`, [nom_categorie]);
-        const categoryId = result[0].insertId || result[0].id;
-        resultUpdate = await mySqlPool.query(`UPDATE stands SET nom = ?, solde = ?, categorie_id = ? WHERE id = ?`, [nom_stand, solde, categoryId, id_stand]);
-
-        if (!result || !resultUpdate) {
-            return res.status(401).json({message: "L'erreur lors de la modification dans la base de données"})
-        }
+    if (!resultUpdate) {
+        return res.status(401).json({message: "L'erreur lors de la modification dans la base de données"})
     }
 
     const [updatedStand] = await mySqlPool.query('SELECT s.id AS id_stand, s.nom AS nom_stand, s.solde, cat.nom AS nom_categorie FROM stands s JOIN categories cat ON s.categorie_id = cat.id WHERE s.id = ?', [id_stand]);

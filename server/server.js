@@ -9,6 +9,8 @@ import routerAndroid from './routes/android.js';
 import mysqlPool from "./config/db.js";
 import routerStands from "./routes/react/admin/stands.js";
 import routerFestivaliers from "./routes/react/admin/festivaliers.js";
+import routerBenevoles from "./routes/react/admin/benevoles.js";
+import routerCategories from "./routes/react/admin/categories.js";
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -24,6 +26,8 @@ app.use(cookieParser());
 app.use('/api/auth', routerReact);
 app.use('/api/admin/stands', routerStands);
 app.use('/api/admin/festivaliers', routerFestivaliers);
+app.use('/api/admin/benevoles', routerBenevoles);
+app.use('/api/admin/categories', routerCategories);
 app.use('/api/android', routerAndroid);
 
 app.get('/', (req, res) => {
