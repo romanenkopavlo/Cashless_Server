@@ -141,6 +141,7 @@ export const getCardData = async (req, res) => {
 
 export const getTransactions = async (req, res) => {
     const {cardNumber} = req.body
+    console.log("Dans le getTransactions")
     console.log("card number is " + cardNumber)
     const [transactions] = await mySqlPool.query('SELECT t.id AS id_transaction, t.date, t.montant AS montant_transaction, o.type, s.nom AS nom_stand FROM transactions t JOIN cartes c ON t.carte_id = c.id JOIN operations o ON t.operation_id = o.id JOIN affectations a ON t.affectation_id = a.id JOIN stands s ON a.stand_id = s.id WHERE c.numero = ?', [cardNumber])
 
