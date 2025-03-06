@@ -6,42 +6,34 @@ import mySqlPool from "../config/db.js";
 const users = [];
 
 export const signup = async (req, res) => {
-    const {name, surname, login, role, password, cardNumber} = req.body;
+    const {name, surname, login, role, password} = req.body;
     const resultUser = await mySqlPool.query('SELECT * FROM utilisateurs u WHERE u.login = ?', [login]);
-    const resultCard = await mySqlPool.query('SELECT * FROM cartes c WHERE c.numero = ?', [cardNumber]);
 
     const user = resultUser[0][0]
-    const card = resultCard[0][0]
 
-    let userIDCard;
-    if (card) {
-        userIDCard = card.utilisateur_id
-    } else {
-        if (!(cardNumber.length === 0)) {
-            return res.status(401).json({message: `La carte avec numéro ${cardNumber} n'existe pas`})
-        }
-    }
-
-    if (!user && !userIDCard) {
+    if (!user) {
         const getPrivilege = await mySqlPool.query('SELECT * FROM privileges p WHERE p.nom = ?', [role])
         const idPrivilege = getPrivilege[0][0].id
-        if (idPrivilege) {
-            const resultInsert = await mySqlPool.query(`INSERT INTO utilisateurs (nom, prenom, login, password, privilege_id) VALUES (?, ?, ?, ?, ?)`, [surname, name, login, password, idPrivilege]);
-            const resultUser = await mySqlPool.query(`SELECT * FROM utilisateurs u WHERE u.login = ?`, [login])
-            const user = resultUser[0][0]
-            const userID = user.idutilisateur
-            const resultUpdate = await mySqlPool.query(`UPDATE cartes SET utilisateur_id = ? WHERE numero = ?`, [userID, cardNumber])
-            if (!resultInsert || !resultUpdate) {
-                return res.status(401).json({message: "L'erreur lors de l'ajout dans la base de données"})
-            }
+
+        if (!idPrivilege) {
+            return res.status(401).json({message: "L'erreur lors de l'ajout dans la base de données"})
         }
+
+        let resultInsert
+
+        if (role === "Bénévole") {
+            resultInsert = await mySqlPool.query(`INSERT INTO utilisateurs (nom, prenom, login, password, privilege_id, is_valid) VALUES (?, ?, ?, ?, ?, ?)`, [surname, name, login, password, idPrivilege, 0]);
+        } else {
+            resultInsert = await mySqlPool.query(`INSERT INTO utilisateurs (nom, prenom, login, password, privilege_id, is_valid) VALUES (?, ?, ?, ?, ?, ?)`, [surname, name, login, password, idPrivilege, 1]);
+        }
+
+        if (!resultInsert) {
+            return res.status(401).json({message: "L'erreur lors de l'ajout dans la base de données"})
+        }
+
         return res.status(200).json({message: "Le compte a été créé!"})
     } else {
-        if (user) {
-            return res.status(401).json({message: `L'utilisateur avec login ${login} déja existe`})
-        } else {
-            return res.status(401).json({message: `La carte avec numéro ${cardNumber} déja utilisé`})
-        }
+        return res.status(401).json({message: `L'utilisateur avec login ${login} déja existe`})
     }
 }
 
@@ -53,6 +45,10 @@ export const login = async (req, res) => {
     console.log(userDB)
 
     if (userDB) {
+        if (userDB.is_valid === 0) {
+            return res.status(401).json({message: 'Votre compte est en cours de validation par nos services. Merci de bien vouloir patienter jusqu’à la confirmation.'})
+        }
+
         const user = new User(userDB.id, userDB.uuid, userDB.nom, userDB.prenom, userDB.login, userDB.password, userDB.role);
         const tokens = generateTokens(user);
         user.setRefreshToken(tokens.refreshToken);
