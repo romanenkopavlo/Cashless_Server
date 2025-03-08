@@ -45,26 +45,44 @@ export const createBenevole = async (req, res) => {
 }
 
 export const updateBenevole = async (req, res) => {
-    const {id_benevole, nom, prenom, nom_stand, username} = req.body;
-    const [resultStand] = await mySqlPool.query('SELECT * FROM stands WHERE nom = ?', [nom_stand])
-    const id_stand = resultStand[0].id
-    console.log("Stand id: " + id_stand)
+    const {id_benevole, nom, prenom, nom_stand, username, role} = req.body;
+
+    let id_stand
+
+    if (nom_stand) {
+        const [resultStand] = await mySqlPool.query('SELECT * FROM stands WHERE nom = ?', [nom_stand])
+        id_stand = resultStand[0].id
+        console.log("Stand id: " + id_stand)
+    } else {
+        id_stand = null
+    }
 
     if (await verifyBenevoleUpdate(id_benevole, username)) {
         return res.status(401).json({message: "L'utilisateur avec ce nom déja existe"})
     }
+    let resultUpdate
 
-    const resultUpdate = await mySqlPool.query('UPDATE utilisateurs SET nom = ?, prenom = ?, login = ?, stand_id = ? WHERE id = ?', [nom, prenom, username, id_stand, id_benevole])
+    if (role) {
+        const getPrivilege = await mySqlPool.query('SELECT * FROM privileges p WHERE p.nom = ?', [role])
+        const idPrivilege = getPrivilege[0][0].id
+        resultUpdate = await mySqlPool.query('UPDATE utilisateurs SET privilege_id = ?, stand_id = ? WHERE id = ?', [idPrivilege, null, id_benevole])
+        if (!resultUpdate) {
+            return res.status(401).json({message: "L'erreur lors de la modification dans la base de données"})
+        }
+        return res.status(200).json({message: "Le rôle a été modifié"})
+    } else {
+        resultUpdate = await mySqlPool.query('UPDATE utilisateurs SET nom = ?, prenom = ?, login = ?, stand_id = ? WHERE id = ?', [nom, prenom, username, id_stand, id_benevole])
 
-    if (!resultUpdate) {
-        return res.status(401).json({message: "L'erreur lors de la modification dans la base de données"})
+        if (!resultUpdate) {
+            return res.status(401).json({message: "L'erreur lors de la modification dans la base de données"})
+        }
+
+        const [updatedBenevole] = await mySqlPool.query('SELECT u.*, s.nom AS nom_stand FROM utilisateurs u JOIN stands s ON u.stand_id = s.id WHERE u.id = ?', [id_benevole]);
+
+        console.log(updatedBenevole[0])
+
+        return res.status(200).json({message: "Le bénévole a été modifié", updatedBenevole: updatedBenevole[0] || null})
     }
-
-    const [updatedBenevole] = await mySqlPool.query('SELECT u.*, s.nom AS nom_stand FROM utilisateurs u JOIN stands s ON u.stand_id = s.id WHERE u.id = ?', [id_benevole]);
-
-    console.log(updatedBenevole[0])
-
-    return res.status(200).json({message: "Le bénévole a été modifié", updatedBenevole: updatedBenevole[0] || null})
 }
 
 export const deleteBenevole = async (req, res) => {

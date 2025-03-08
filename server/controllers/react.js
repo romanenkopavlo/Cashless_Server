@@ -6,26 +6,21 @@ import mySqlPool from "../config/db.js";
 const users = [];
 
 export const signup = async (req, res) => {
-    const {name, surname, login, role, password} = req.body;
+    const {name, surname, login, password} = req.body;
     const resultUser = await mySqlPool.query('SELECT * FROM utilisateurs u WHERE u.login = ?', [login]);
 
     const user = resultUser[0][0]
 
     if (!user) {
-        const getPrivilege = await mySqlPool.query('SELECT * FROM privileges p WHERE p.nom = ?', [role])
+        const nomPrivilege = "Visiteur"
+        const getPrivilege = await mySqlPool.query('SELECT * FROM privileges p WHERE p.nom = ?', [nomPrivilege])
         const idPrivilege = getPrivilege[0][0].id
 
         if (!idPrivilege) {
-            return res.status(401).json({message: "L'erreur lors de l'ajout dans la base de données"})
+            return res.status(401).json({message: "L'erreur lors de la recuperation du privilege dans la base de données"})
         }
 
-        let resultInsert
-
-        if (role === "Bénévole") {
-            resultInsert = await mySqlPool.query(`INSERT INTO utilisateurs (nom, prenom, login, password, privilege_id, is_valid) VALUES (?, ?, ?, ?, ?, ?)`, [surname, name, login, password, idPrivilege, 0]);
-        } else {
-            resultInsert = await mySqlPool.query(`INSERT INTO utilisateurs (nom, prenom, login, password, privilege_id, is_valid) VALUES (?, ?, ?, ?, ?, ?)`, [surname, name, login, password, idPrivilege, 1]);
-        }
+        const resultInsert = await mySqlPool.query(`INSERT INTO utilisateurs (nom, prenom, login, password, privilege_id) VALUES (?, ?, ?, ?, ?)`, [surname, name, login, password, idPrivilege]);
 
         if (!resultInsert) {
             return res.status(401).json({message: "L'erreur lors de l'ajout dans la base de données"})
@@ -45,10 +40,6 @@ export const login = async (req, res) => {
     console.log(userDB)
 
     if (userDB) {
-        if (userDB.is_valid === 0) {
-            return res.status(401).json({message: 'Votre compte est en cours de validation par nos services. Merci de bien vouloir patienter jusqu’à la confirmation.'})
-        }
-
         const user = new User(userDB.id, userDB.uuid, userDB.nom, userDB.prenom, userDB.login, userDB.password, userDB.role);
         const tokens = generateTokens(user);
         user.setRefreshToken(tokens.refreshToken);
