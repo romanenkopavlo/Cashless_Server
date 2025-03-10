@@ -14,7 +14,6 @@ export const authenticateJWT = (req, res, next) => {
 
     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
         if (err) {
-            console.log("blyat")
             return res.status(401).json({ message: "Token invalide ou expiré." });
         }
         req.user = decoded;
