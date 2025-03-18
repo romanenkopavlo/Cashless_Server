@@ -158,7 +158,7 @@ export const addCard = async (req, res) => {
                 return res.status(401).json({message: "L'erreur lors de l'ajout dans la base de données"});
             }
         } else {
-            return res.status(401).json({message: 'Cette carte est déja utilisé'})
+            return res.status(401).json({message: 'Cette carte est déja utilisée'})
         }
     }
     return res.status(401).json({message: 'Cette carte est invalide'})

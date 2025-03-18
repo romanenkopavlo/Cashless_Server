@@ -1,7 +1,8 @@
 import mySqlPool from "../../../../config/db.js";
 
 export const getStands = async (req, res) => {
-    const [stands] = await mySqlPool.query('SELECT s.id AS id_stand, s.nom AS nom_stand, s.solde, cat.nom AS nom_categorie FROM stands s LEFT JOIN categories cat ON s.categorie_id = cat.id')
+    const [stands] = await mySqlPool.query('SELECT s.id AS id_stand, s.nom AS nom_stand, s.solde, cat.nom AS nom_categorie, COUNT(DISTINCT utilisateur_id) AS nombre_benevoles FROM stands s JOIN categories cat ON s.categorie_id = cat.id LEFT JOIN affectations on s.id=affectations.stand_id GROUP BY s.id, s.nom, s.solde, cat.nom')
+    console.log(stands)
 
     console.log("Dans le getStands")
 
@@ -9,7 +10,7 @@ export const getStands = async (req, res) => {
         return res.status(404).json({ message: "Aucun stand trouvé" });
     }
 
-    res.json(stands);
+    res.json(stands)
 }
 
 export const createStand = async (req, res) => {

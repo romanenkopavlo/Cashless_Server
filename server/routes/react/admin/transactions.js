@@ -7,4 +7,5 @@ const routerTransactions = Router();
 
 routerTransactions.get('/getTransactions', authenticateAdminJWT, getTransactions);
 routerTransactions.post('/refundTransaction', authenticateAdminJWT, refundTransaction);
+
 export default routerTransactions;
