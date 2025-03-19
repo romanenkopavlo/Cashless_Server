@@ -26,7 +26,14 @@ export const login = (req, res) => {
 }
 
 export const products = (req, res) => {
-    res.json({name: "coca-cola", price: 2.5, amount: 8000}, {name: "fries", price: 1.5, amount: 90000})
+    console.log("dans les products")
+    res.status(200).json({allProductsResponse: [
+        {name: "Coca", amount: 888, price: 3.5},
+        {name: "Fries", amount: 555, price: 3.5},
+        {name: "Burgers", amount: 333, price: 5.5},
+        {name: "Vodka", amount: 999, price: 0.02},
+        {name: "Jaëgermeister", amount: 666, price: 5}
+    ]});
 }
 
 export const checkCard = (req, res) => {
