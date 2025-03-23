@@ -114,23 +114,47 @@ export const verifyBalance = async (req, res) => {
 }
 
 export const getCardData = async (req, res) => {
-    const {login} = req.user
-    const resultUser = await mySqlPool.query('SELECT * FROM utilisateurs u WHERE u.login = ?', [login])
-    const userDB = resultUser[0][0]
-    const resultCard = await mySqlPool.query('SELECT * FROM cartes c WHERE c.utilisateur_id = ?', [userDB.id])
-    const cardDB = resultCard[0][0]
-    if (cardDB) {
-        res.status(200).json({numero: cardDB.numero, montant: cardDB.montant})
-    } else {
-        res.status(200).json({numero: null, montant: null})
-    }
-}
+    const { id } = req.user;
+
+    const result = await mySqlPool.query(`SELECT c.id AS id_carte, c.numero, c.montant, s.nom AS nom_stand, t.id AS id_transaction, t.date, t.montant AS montant_transaction, t.carte_id, o.type AS type FROM cartes c LEFT JOIN transactions t ON c.id = t.carte_id LEFT JOIN affectations a ON t.affectation_id = a.id LEFT JOIN stands s ON a.stand_id = s.id LEFT JOIN operations o ON t.operation_id = o.id JOIN utilisateurs u ON u.id = c.utilisateur_id WHERE u.id = ? ORDER BY c.id`, [id]);
+
+    const cards = result[0];
+
+    const groupedCards = cards.reduce((acc, card) => {
+        const { id_carte, numero, montant, id_transaction, date, montant_transaction, type, nom_stand } = card;
+
+        if (!acc[id_carte]) {
+            acc[id_carte] = {
+                id_carte,
+                numero,
+                montant,
+                transactions: []
+            };
+        }
+
+        if (id_transaction) {
+            acc[id_carte].transactions.push({
+                id_transaction,
+                date,
+                montant_transaction,
+                type,
+                nom_stand
+            });
+        }
+
+        return acc;
+    }, {});
+
+    const finalCards = Object.values(groupedCards);
+
+    return res.status(200).json(finalCards);
+};
 
 export const getTransactions = async (req, res) => {
     const {cardNumber} = req.body
     console.log("Dans le getTransactions")
     console.log("card number is " + cardNumber)
-    const [transactions] = await mySqlPool.query('SELECT t.id AS id_transaction, t.date, t.montant AS montant_transaction, o.type, s.nom AS nom_stand FROM transactions t JOIN cartes c ON t.carte_id = c.id JOIN operations o ON t.operation_id = o.id JOIN affectations a ON t.affectation_id = a.id JOIN stands s ON a.stand_id = s.id WHERE c.numero = ?', [cardNumber])
+    const [transactions] = await mySqlPool.query('SELECT t.id AS id_transaction, t.date, t.montant AS montant_transaction, o.type, s.nom AS nom_stand FROM transactions t LEFT JOIN cartes c ON t.carte_id = c.id LEFT JOIN operations o ON t.operation_id = o.id LEFT JOIN affectations a ON t.affectation_id = a.id LEFT JOIN stands s ON a.stand_id = s.id WHERE c.numero = ?', [cardNumber])
 
     console.log(transactions)
 
@@ -147,19 +171,19 @@ export const addCard = async (req, res) => {
     const resultCard = await mySqlPool.query('SELECT * FROM cartes WHERE numero = ?', cardNumber)
     const card = resultCard[0][0]
 
-    if (card) {
-        if (!card.utilisateur_id) {
-            const resultUser = await mySqlPool.query('SELECT * FROM utilisateurs WHERE login = ?', login)
-            const user = resultUser[0][0]
-            const resultCardUpdate = await mySqlPool.query(`UPDATE cartes SET utilisateur_id = ? WHERE numero = ?`, [user.id, cardNumber])
-            if (resultCardUpdate) {
-                return res.status(200).json({numero: card.numero, montant: card.montant})
-            } else {
-                return res.status(401).json({message: "L'erreur lors de l'ajout dans la base de données"});
-            }
-        } else {
-            return res.status(401).json({message: 'Cette carte est déja utilisée'})
-        }
+    if (!card) {
+        return res.status(401).json({message: 'Cette carte est invalide'})
     }
-    return res.status(401).json({message: 'Cette carte est invalide'})
+
+    if (card.utilisateur_id) {
+        return res.status(401).json({message: 'Cette carte est déja utilisée'})
+    }
+
+    const resultCardUpdate = await mySqlPool.query(`UPDATE cartes SET utilisateur_id = (SELECT id FROM utilisateurs WHERE login = ?) WHERE numero = ?`, [login, cardNumber]);
+
+    if (resultCardUpdate[0].affectedRows > 0) {
+        return res.status(200).json({ message: "La carte a été ajoutée avec succès." });
+    } else {
+        return res.status(500).json({ message: "Erreur lors de l'ajout dans la base de données." });
+    }
 }
