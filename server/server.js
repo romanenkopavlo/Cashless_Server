@@ -16,6 +16,7 @@ import routerCards from "./routes/react/admin/cards.js";
 import routerPhones from "./routes/react/admin/phones.js";
 import routerMarques from "./routes/react/admin/marques.js";
 import routerTerminals from "./routes/react/admin/terminals.js";
+import routerStatistics from "./routes/react/admin/statistics.js";
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -39,6 +40,7 @@ app.use('/api/admin/marques', routerMarques);
 app.use('/api/admin/terminals', routerTerminals);
 app.use('/api/admin/benevoles', routerBenevoles);
 app.use('/api/admin/categories', routerCategories);
+app.use('/api/admin/statistics', routerStatistics);
 app.use('/api/admin/transactions', routerTransactions);
 app.use('/api/admin/festivaliers', routerFestivaliers);
 

@@ -36,6 +36,21 @@ export const products = (req, res) => {
     ]});
 }
 
+export const stats = async (req, res) => {
+    console.log("dans le stats")
+
+    const {tagNFC} = req.body;
+    const [transactions] = await mySqlPool.query('SELECT t.date, t.montant AS price, o.type, s.nom AS stand FROM transactions t LEFT JOIN cartes c ON t.carte_id = c.id LEFT JOIN operations o ON t.operation_id = o.id LEFT JOIN affectations a ON t.affectation_id = a.id LEFT JOIN stands s ON a.stand_id = s.id WHERE c.nfc = ?', [tagNFC]);
+
+    console.log(transactions)
+
+    if (transactions.length === 0) {
+        return res.status(404).json({ message: "Aucune transaction trouvée" });
+    }
+
+    res.status(200).json({allTransactions: transactions});
+}
+
 export const checkCard = (req, res) => {
     console.log(req.body)
     const {tag} = req.body

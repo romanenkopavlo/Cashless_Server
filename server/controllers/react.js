@@ -166,24 +166,24 @@ export const getTransactions = async (req, res) => {
 }
 
 export const addCard = async (req, res) => {
-    const {login} = req.user;
-    const {cardNumber} = req.body;
-    const resultCard = await mySqlPool.query('SELECT * FROM cartes WHERE numero = ?', cardNumber)
-    const card = resultCard[0][0]
+    try {
+        const {login} = req.user;
+        const {cardNumber} = req.body;
 
-    if (!card) {
-        return res.status(401).json({message: 'Cette carte est invalide'})
-    }
+        const [updateResult] = await mySqlPool.query(`UPDATE cartes SET utilisateur_id = (SELECT id FROM utilisateurs WHERE login = ?) WHERE numero = ? AND utilisateur_id IS NULL`, [login, cardNumber]);
 
-    if (card.utilisateur_id) {
-        return res.status(401).json({message: 'Cette carte est déja utilisée'})
-    }
+        if (updateResult.affectedRows === 0) {
+            return res.status(401).json({ message: "Carte invalide ou déjà utilisée." });
+        }
 
-    const resultCardUpdate = await mySqlPool.query(`UPDATE cartes SET utilisateur_id = (SELECT id FROM utilisateurs WHERE login = ?) WHERE numero = ?`, [login, cardNumber]);
+        const [selectResult] = await mySqlPool.query(`SELECT id AS id_carte, numero, montant FROM cartes WHERE numero = ?`, [cardNumber]);
 
-    if (resultCardUpdate[0].affectedRows > 0) {
-        return res.status(200).json({ message: "La carte a été ajoutée avec succès." });
-    } else {
-        return res.status(500).json({ message: "Erreur lors de l'ajout dans la base de données." });
+        const newCard = selectResult[0];
+        newCard.transactions = [];
+
+        return res.status(200).json({ message: "La carte a été ajoutée avec succès.", newCard });
+    } catch (error) {
+        console.error("Erreur lors de l'ajout de la carte :", error);
+        return res.status(500).json({ message: "Erreur interne du serveur." });
     }
 }
