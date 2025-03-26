@@ -116,7 +116,7 @@ export const verifyBalance = async (req, res) => {
 export const getCardData = async (req, res) => {
     const { id } = req.user;
 
-    const result = await mySqlPool.query(`SELECT c.id AS id_carte, c.numero, c.montant, s.nom AS nom_stand, t.id AS id_transaction, t.date, t.montant AS montant_transaction, t.carte_id, o.type AS type FROM cartes c LEFT JOIN transactions t ON c.id = t.carte_id LEFT JOIN affectations a ON t.affectation_id = a.id LEFT JOIN stands s ON a.stand_id = s.id LEFT JOIN operations o ON t.operation_id = o.id JOIN utilisateurs u ON u.id = c.utilisateur_id WHERE u.id = ? ORDER BY c.id`, [id]);
+    const result = await mySqlPool.query(`SELECT c.id AS id_carte, c.numero, c.montant, s.nom AS nom_stand, t.id AS id_transaction, t.date, t.montant AS montant_transaction, t.carte_id, o.type AS type FROM cartes c LEFT JOIN transactions t ON c.id = t.carte_id LEFT JOIN terminaux ter ON t.terminal_id = ter.id LEFT JOIN stands s ON ter.stand_id = s.id LEFT JOIN operations o ON t.operation_id = o.id JOIN utilisateurs u ON u.id = c.utilisateur_id WHERE u.id = ? ORDER BY c.id`, [id]);
 
     const cards = result[0];
 
@@ -154,7 +154,7 @@ export const getTransactions = async (req, res) => {
     const {cardNumber} = req.body
     console.log("Dans le getTransactions")
     console.log("card number is " + cardNumber)
-    const [transactions] = await mySqlPool.query('SELECT t.id AS id_transaction, t.date, t.montant AS montant_transaction, o.type, s.nom AS nom_stand FROM transactions t LEFT JOIN cartes c ON t.carte_id = c.id LEFT JOIN operations o ON t.operation_id = o.id LEFT JOIN affectations a ON t.affectation_id = a.id LEFT JOIN stands s ON a.stand_id = s.id WHERE c.numero = ?', [cardNumber])
+    const [transactions] = await mySqlPool.query('SELECT t.id AS id_transaction, t.date, t.montant AS montant_transaction, o.type, s.nom AS nom_stand FROM transactions t LEFT JOIN cartes c ON t.carte_id = c.id LEFT JOIN operations o ON t.operation_id = o.id LEFT JOIN terminaux ter ON t.terminal_id = ter.id LEFT JOIN stands s ON ter.stand_id = s.id WHERE c.numero = ?', [cardNumber])
 
     console.log(transactions)
 

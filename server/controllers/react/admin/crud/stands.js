@@ -1,7 +1,7 @@
 import mySqlPool from "../../../../config/db.js";
 
 export const getStands = async (req, res) => {
-    const [stands] = await mySqlPool.query('SELECT s.id AS id_stand, s.nom AS nom_stand, s.solde, cat.nom AS nom_categorie, COUNT(DISTINCT utilisateur_id) AS nombre_benevoles FROM stands s JOIN categories cat ON s.categorie_id = cat.id LEFT JOIN affectations on s.id=affectations.stand_id GROUP BY s.id, s.nom, s.solde, cat.nom')
+    const [stands] = await mySqlPool.query('SELECT s.id AS id_stand, s.nom AS nom_stand, s.nombre_terminaux, cat.nom AS nom_categorie, COUNT(DISTINCT utilisateur_id) AS nombre_benevoles FROM stands s JOIN categories cat ON s.categorie_id = cat.id LEFT JOIN affectations on s.id=affectations.stand_id GROUP BY s.id, s.nom, s.nombre_terminaux, cat.nom')
     console.log(stands)
 
     console.log("Dans le getStands")
@@ -14,7 +14,7 @@ export const getStands = async (req, res) => {
 }
 
 export const createStand = async (req, res) => {
-    const {nom_stand, solde, nom_categorie} = req.body
+    const {nom_stand, nombre_terminaux, nom_categorie} = req.body
 
     if (await verifyStandCreate(nom_stand)) {
         return res.status(401).json({message: "Le stand avec ce nom déja existe"})
@@ -23,22 +23,24 @@ export const createStand = async (req, res) => {
     const resultCategory = await mySqlPool.query('SELECT * FROM categories WHERE categories.nom = ?', [nom_categorie])
     const category = resultCategory[0][0]
 
-    const resultInsert = await mySqlPool.query(`INSERT INTO stands (nom, solde, categorie_id) VALUES (?, ?, ?)`, [nom_stand, solde, category.id])
+    const resultInsert = await mySqlPool.query(`INSERT INTO stands (nom, nombre_terminaux, categorie_id) VALUES (?, ?, ?)`, [nom_stand, nombre_terminaux, category.id])
 
     if (!resultInsert) {
         return res.status(401).json({message: "L'erreur lors de l'ajout dans la base de données"})
     }
 
     const standID = resultInsert[0].insertId || resultInsert[0].id;
-    const [newStand] = await mySqlPool.query('SELECT s.id AS id_stand, s.nom AS nom_stand, s.solde, cat.nom AS nom_categorie FROM stands s JOIN categories cat ON s.categorie_id = cat.id WHERE s.id = ?', [standID])
+    const [newStand] = await mySqlPool.query('SELECT s.id AS id_stand, s.nom AS nom_stand, s.nombre_terminaux, cat.nom AS nom_categorie FROM stands s JOIN categories cat ON s.categorie_id = cat.id WHERE s.id = ?', [standID])
 
     console.log(newStand[0])
+
+    newStand[0].nombre_benevoles = 0;
 
     return res.status(200).json({message: "Le stand a ete ajote", newStand: newStand[0] || null})
 }
 
 export const updateStand = async (req, res) => {
-    const {id_stand, nom_stand, solde, nom_categorie} = req.body
+    const {id_stand, nom_stand, nombre_terminaux, nom_categorie} = req.body
 
     if (await verifyStandUpdate(id_stand, nom_stand)) {
         return res.status(401).json({message: "Le stand avec ce nom déja existe"})
@@ -47,13 +49,13 @@ export const updateStand = async (req, res) => {
     const resultCategory = await mySqlPool.query('SELECT * FROM categories WHERE categories.nom = ?', [nom_categorie])
     const category = resultCategory[0][0]
 
-    const resultUpdate = await mySqlPool.query(`UPDATE stands SET nom = ?, solde = ?, categorie_id = ? WHERE id = ?`, [nom_stand, solde, category.id, id_stand])
+    const resultUpdate = await mySqlPool.query(`UPDATE stands SET nom = ?, nombre_terminaux = ?, categorie_id = ? WHERE id = ?`, [nom_stand, nombre_terminaux, category.id, id_stand])
 
     if (!resultUpdate) {
         return res.status(401).json({message: "L'erreur lors de la modification dans la base de données"})
     }
 
-    const [updatedStand] = await mySqlPool.query('SELECT s.id AS id_stand, s.nom AS nom_stand, s.solde, cat.nom AS nom_categorie FROM stands s JOIN categories cat ON s.categorie_id = cat.id WHERE s.id = ?', [id_stand]);
+    const [updatedStand] = await mySqlPool.query('SELECT s.id AS id_stand, s.nom AS nom_stand, s.nombre_terminaux, cat.nom AS nom_categorie, COUNT(DISTINCT utilisateur_id) AS nombre_benevoles FROM stands s LEFT JOIN categories cat ON s.categorie_id = cat.id LEFT JOIN affectations on s.id = affectations.stand_id WHERE s.id = ? GROUP BY s.id, s.nom, s.nombre_terminaux, cat.nom', [id_stand]);
 
     console.log(updatedStand[0])
 
