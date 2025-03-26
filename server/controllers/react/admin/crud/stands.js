@@ -17,7 +17,7 @@ export const createStand = async (req, res) => {
     const {nom_stand, nombre_terminaux, nom_categorie} = req.body
 
     if (await verifyStandCreate(nom_stand)) {
-        return res.status(401).json({message: "Le stand avec ce nom déja existe"})
+        return res.status(401).json({message: "Le stand avec ce nom déja existe."})
     }
 
     const resultCategory = await mySqlPool.query('SELECT * FROM categories WHERE categories.nom = ?', [nom_categorie])
@@ -26,7 +26,7 @@ export const createStand = async (req, res) => {
     const resultInsert = await mySqlPool.query(`INSERT INTO stands (nom, nombre_terminaux, categorie_id) VALUES (?, ?, ?)`, [nom_stand, nombre_terminaux, category.id])
 
     if (!resultInsert) {
-        return res.status(401).json({message: "L'erreur lors de l'ajout dans la base de données"})
+        return res.status(401).json({message: "L'erreur lors de l'ajout dans la base de données."})
     }
 
     const standID = resultInsert[0].insertId || resultInsert[0].id;
