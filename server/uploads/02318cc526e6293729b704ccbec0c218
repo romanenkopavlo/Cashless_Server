@@ -1,0 +1,20 @@
+partie html
+
+<dialog>
+        <p>Modifier la date</p>
+</dialog>
+
+
+_____________________________________
+
+Partie JavaScript
+
+const dialog = document.querySelector("dialog");
+
+pour ouvrir 
+
+dialog.showModal()
+
+pour fermer
+
+dialog.close()
