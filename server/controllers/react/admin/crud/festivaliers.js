@@ -71,6 +71,16 @@ export const updateFestivalier = async (req, res) => {
 export const deleteFestivalier = async (req, res) => {
     const {id_festivalier} = req.body
 
+    const [row] = await mySqlPool.query('SELECT COUNT(*) AS nombre_cartes FROM cartes WHERE utilisateur_id = ?', [id_festivalier])
+
+    if (row.length === 0) {
+        return res.status(404).json({ message: "Utilisateur non trouvé." });
+    }
+
+    if (row[0].nombre_cartes > 0) {
+        return res.status(409).json({ message: "Impossible de supprimer cet utilisateur car des cartes lui sont associées."});
+    }
+
     const resultDelete = await mySqlPool.query('DELETE FROM utilisateurs WHERE id = ?', [id_festivalier])
 
     if (!resultDelete) {

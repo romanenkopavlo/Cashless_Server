@@ -17,17 +17,24 @@ export const getCards = async (req, res) => {
 export const deleteCard = async (req, res) => {
     const {id_card} = req.body
 
-    const [rows] = await mySqlPool.query('SELECT utilisateur_id FROM cartes WHERE id = ?', [id_card]);
+    const [rows] = await mySqlPool.query('SELECT (SELECT COUNT(*) FROM transactions WHERE carte_id = ?) AS nombre_transactions, (SELECT montant FROM cartes WHERE id = ?) AS montant, (SELECT utilisateur_id FROM cartes WHERE id = ?) AS utilisateur_id FROM cartes WHERE id = ?', [id_card, id_card, id_card, id_card]);
 
     if (rows.length === 0) {
         return res.status(404).json({ message: "Carte non trouvée." });
     }
 
-    const utilisateur_id = rows[0].utilisateur_id;
-
+    const { nombre_transactions, montant, utilisateur_id } = rows[0];
 
     if (utilisateur_id) {
         return res.status(409).json({ message: "Cette carte est déjà associée à un utilisateur et ne peut pas être supprimée tant qu'elle est liée." });
+    }
+
+    if (nombre_transactions > 0) {
+        return res.status(409).json({ message: "Cette carte possède des transactions et ne peut pas être supprimée." });
+    }
+
+    if (montant > 0) {
+        return res.status(409).json({ message: "Impossible de supprimer la carte car elle contient encore un solde positif." });
     }
 
     const [resultDelete] = await mySqlPool.query('DELETE FROM cartes WHERE id = ?', [id_card])
@@ -35,6 +42,7 @@ export const deleteCard = async (req, res) => {
     if (resultDelete.affectedRows === 0) {
         return res.status(501).json({message: "L'erreur lors de la suppression."})
     }
+
     return res.status(200).json({message: "La carte a été supprimée."})
 }
 

@@ -1,19 +1,20 @@
 import mySqlPool from "../../../../config/db.js";
+import {getCurrentDate} from "../../../../utils/getCurrentDate.js";
 
 export const getBenevoles = async (req, res) => {
     const nomPrivilege = "Bénévole";
 
     console.log("Dans le getBenevoles")
 
-    const [benevoles] = await mySqlPool.query("SELECT u.id, u.nom, u.prenom, u.login, GROUP_CONCAT(s.nom ORDER BY s.nom SEPARATOR ', ') AS noms_stands, GROUP_CONCAT(s.id ORDER BY s.id SEPARATOR ', ') AS ids_stands FROM utilisateurs u JOIN privileges p ON u.privilege_id = p.id LEFT JOIN affectations a ON u.id = a.utilisateur_id LEFT JOIN stands s ON a.stand_id = s.id WHERE p.nom = ? GROUP BY u.id, u.nom, u.prenom, u.login", [nomPrivilege])
+    const [benevoles] = await mySqlPool.query("SELECT u.id, u.nom, u.prenom, u.login, GROUP_CONCAT(s.nom ORDER BY a.stand_id SEPARATOR ', ') AS noms_stands, GROUP_CONCAT(s.id ORDER BY a.stand_id SEPARATOR ', ') AS ids_stands, GROUP_CONCAT(per.nom ORDER BY a.stand_id SEPARATOR ', ') AS noms_permissions FROM utilisateurs u JOIN privileges p ON u.privilege_id = p.id LEFT JOIN affectations a ON u.id = a.utilisateur_id LEFT JOIN stands s ON a.stand_id = s.id LEFT JOIN permissions per ON a.permission_id = per.id WHERE p.nom = ? GROUP BY u.id, u.nom, u.prenom, u.login", [nomPrivilege])
 
     console.log(benevoles)
 
     if (benevoles.length === 0) {
-        return res.status(404).json({ message: "Aucun bénévole trouvé" });
+        return res.status(404).json({ message: "Aucun bénévole trouvé." });
     }
 
-    res.json(benevoles);
+    res.status(200).json(benevoles);
 }
 
 export const createBenevole = async (req, res) => {
@@ -45,15 +46,16 @@ export const updateBenevole = async (req, res) => {
     const {id_benevole, nom, prenom, username, role} = req.body;
 
     if (await verifyBenevoleUpdate(id_benevole, username)) {
-        return res.status(401).json({message: "L'utilisateur avec ce nom déja existe"})
+        return res.status(401).json({message: "L'utilisateur avec ce nom déja existe."})
     }
-    let resultUpdate
+
+    let resultUpdate;
 
     if (role) {
         const [getPrivilege] = await mySqlPool.query('SELECT * FROM privileges p WHERE p.nom = ?', [role])
 
         if (getPrivilege.length === 0) {
-            return res.status(401).json({ message: "Rôle invalide" });
+            return res.status(401).json({ message: "Rôle invalide." });
         }
 
         const idPrivilege = getPrivilege[0].id
@@ -62,18 +64,18 @@ export const updateBenevole = async (req, res) => {
         [resultUpdate] = await mySqlPool.query('UPDATE utilisateurs SET privilege_id = ? WHERE id = ?', [idPrivilege, id_benevole])
 
         if (resultUpdate.affectedRows === 0) {
-            return res.status(401).json({message: "L'erreur lors de la modification dans la base de données"})
+            return res.status(401).json({message: "L'erreur lors de la modification dans la base de données."})
         }
 
-        return res.status(200).json({message: "Le rôle a été modifié"})
+        return res.status(200).json({message: "Le rôle a été modifié."})
     } else {
         [resultUpdate] = await mySqlPool.query('UPDATE utilisateurs SET nom = ?, prenom = ?, login = ? WHERE id = ?', [nom, prenom, username, id_benevole])
 
         if (resultUpdate.affectedRows === 0) {
-            return res.status(401).json({message: "L'erreur lors de la modification dans la base de données"})
+            return res.status(401).json({message: "L'erreur lors de la modification dans la base de données."})
         }
 
-        const [updatedBenevole] = await mySqlPool.query("SELECT u.id, u.nom, u.prenom, u.login, GROUP_CONCAT(s.nom ORDER BY s.nom SEPARATOR ', ') AS noms_stands, GROUP_CONCAT(s.id ORDER BY s.id SEPARATOR ', ') AS ids_stands FROM utilisateurs u JOIN privileges p ON u.privilege_id = p.id LEFT JOIN affectations a ON u.id = a.utilisateur_id LEFT JOIN stands s ON a.stand_id = s.id WHERE u.id = ? GROUP BY u.id, u.nom, u.prenom, u.login", [id_benevole]);
+        const [updatedBenevole] = await mySqlPool.query("SELECT u.id, u.nom, u.prenom, u.login, GROUP_CONCAT(s.nom ORDER BY a.stand_id SEPARATOR ', ') AS noms_stands, GROUP_CONCAT(s.id ORDER BY a.stand_id SEPARATOR ', ') AS ids_stands, GROUP_CONCAT(per.nom ORDER BY a.stand_id SEPARATOR ', ') AS noms_permissions FROM utilisateurs u JOIN privileges p ON u.privilege_id = p.id LEFT JOIN affectations a ON u.id = a.utilisateur_id LEFT JOIN stands s ON a.stand_id = s.id LEFT JOIN permissions per ON a.permission_id = per.id WHERE u.id = ? GROUP BY u.id, u.nom, u.prenom, u.login", [id_benevole]);
 
         console.log(updatedBenevole[0])
 
@@ -84,29 +86,35 @@ export const updateBenevole = async (req, res) => {
 export const deleteBenevole = async (req, res) => {
     const {id_benevole} = req.body
 
-    const [affectations] = await mySqlPool.query('SELECT * FROM affectations WHERE utilisateur_id = ?', [id_benevole]);
+    const [row] = await mySqlPool.query('SELECT (SELECT COUNT(*) FROM affectations WHERE utilisateur_id = ?) AS nombre_affectations, (SELECT COUNT(*) FROM cartes WHERE utilisateur_id = ?) AS nombre_cartes', [id_benevole, id_benevole]);
 
-    if (affectations.length > 0) {
+    if (row.length === 0) {
+        return res.status(404).json({ message: "Aucune information trouvée." });
+    }
+
+    if (row[0].nombre_affectations > 0) {
         return res.status(409).json({ message: "Le bénévole est affecté à un stand. Il ne peut pas être supprimé tant qu'il est affecté." });
+    }
+
+    if (row[0].nombre_cartes > 0) {
+        return res.status(409).json({ message: "Le bénévole possède des cartes associées. Il ne peut pas être supprimé tant qu'elles ne sont pas retirées."});
     }
 
     const [resultDelete] = await mySqlPool.query('DELETE FROM utilisateurs WHERE id = ?', [id_benevole])
 
     if (resultDelete.affectedRows === 0) {
-        return res.status(501).json({message: "L'erreur lors de la suppression dans la base de données"})
+        return res.status(501).json({message: "L'erreur lors de la suppression dans la base de données."})
     }
 
-    return res.status(200).json({message: "Le bénévole a ete supprimé"})
+    return res.status(200).json({message: "Le bénévole a ete supprimé."})
 }
 
 export const affecterBenevole = async (req, res) => {
-    const {id_stand, id_benevole, action} = req.body
+    const {id_stand, id_benevole, action, role} = req.body
 
     if (action === "add") {
-        const currentDate = new Date();
-        const formattedDate = currentDate.toISOString().slice(0, 19).replace("T", " ");
-
-        const [resultInsert] = await mySqlPool.query('INSERT INTO affectations (date_start, utilisateur_id, stand_id, permission_id) VALUES (?, ?, ?, (SELECT id FROM privileges WHERE nom = "Bénévole"))', [formattedDate, id_benevole, id_stand])
+        const date = getCurrentDate();
+        const [resultInsert] = await mySqlPool.query('INSERT INTO affectations (date_start, utilisateur_id, stand_id, permission_id) VALUES (?, ?, ?, (SELECT id FROM permissions WHERE nom = ?))', [date, id_benevole, id_stand, role]);
 
         if (resultInsert.affectedRows === 0) {
             return res.status(401).json({message: "Une erreur est survenue lors de l'affectation du bénévole."})
