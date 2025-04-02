@@ -3,7 +3,7 @@ import { promisify } from "util";
 import mySqlPool from "../../../../config/db.js";
 
 export const getCards = async (req, res) => {
-    const [cards] = await mySqlPool.query('SELECT c.id AS id_carte, c.montant, c.numero, c.nfc, u.login AS login_utilisateur FROM cartes c LEFT JOIN utilisateurs u ON c.utilisateur_id = u.id')
+    const [cards] = await mySqlPool.query('SELECT c.id AS id_carte, c.montant, c.numero, c.nfc, c.is_active, u.login AS login_utilisateur FROM cartes c LEFT JOIN utilisateurs u ON c.utilisateur_id = u.id')
 
     console.log("Dans le getCards")
 
@@ -95,10 +95,11 @@ export const readFileCards = async (req, res) => {
             card.nfc,
             card.numero,
             0,
+            0,
             null
         ]);
 
-        const [resultInsert] = await mySqlPool.query('INSERT INTO cartes (nfc, numero, montant, utilisateur_id) VALUES ?', [formattedCards]);
+        const [resultInsert] = await mySqlPool.query('INSERT INTO cartes (nfc, numero, montant, is_active, utilisateur_id) VALUES ?', [formattedCards]);
 
         if (resultInsert.affectedRows === 0) {
             return res.status(501).json({ message: "Aucune carte n'a été ajoutée."});

@@ -45,6 +45,8 @@ export const login = async (req, res) => {
         user.setRefreshToken(tokens.refreshToken);
         users.push(user);
 
+        console.log(users)
+
         res.cookie('refreshToken', tokens.refreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production'
@@ -65,12 +67,69 @@ export const logout = async (req, res) => {
     res.status(204).send()
 }
 
+export const updateProfile = async (req, res) => {
+    const {id, nom, prenom, login, passwordCurrent, passwordNew} = req.body
+
+    console.log("Dans update profile")
+    console.log(users)
+
+    const [row] = await mySqlPool.query('SELECT * FROM utilisateurs WHERE id = ?', [id])
+
+    if (row.length === 0) {
+        return res.status(404).json({message: "Utilisateur introuvable."})
+    }
+
+    const user = row[0];
+
+    if (passwordCurrent !== user.password) {
+        return res.status(401).json({message: "Mot de passe actuel incorrect."})
+    }
+
+    const [updateResult] = await mySqlPool.query('UPDATE utilisateurs SET nom = ?, prenom = ?, login = ?, password = ? WHERE id = ?', [nom, prenom, login, passwordNew, id]);
+
+    if (updateResult.affectedRows === 0) {
+        return res.status(500).json({message: "Échec de la mise à jour."})
+    }
+
+    const [rowUpdatedUser] = await mySqlPool.query('SELECT u.*, p.nom AS role FROM utilisateurs u JOIN privileges p ON u.privilege_id = p.id WHERE u.id = ?', [id]);
+    const updatedUser = rowUpdatedUser[0];
+
+    console.log(users)
+
+    const userIndex = users.findIndex(user => user.id === updatedUser.id);
+
+    if (userIndex !== -1) {
+        users[userIndex].uuid = updatedUser.uuid;
+        users[userIndex].nom = updatedUser.nom;
+        users[userIndex].prenom = updatedUser.prenom;
+        users[userIndex].login = updatedUser.login;
+        users[userIndex].password = updatedUser.password;
+        users[userIndex].role = updatedUser.role;
+
+        const tokens = generateTokens(users[userIndex]);
+        users[userIndex].setRefreshToken(tokens.refreshToken);
+
+        res.cookie('refreshToken', tokens.refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production'
+        });
+
+        res.json({token: tokens.accessToken});
+    } else {
+        return res.status(404).json({message: "Utilisateur non trouvé dans la session."})
+    }
+}
+
 export const getNewAccessToken = async (req, res) => {
     const refreshToken = req.cookies.refreshToken;
     if (!refreshToken) {
         console.log(refreshToken);
         return res.status(504).json({message: 'Refresh token is required'});
     }
+
+    console.log("Dans getNewAccessToken")
+    console.log("Users: ")
+    console.log(users)
 
     let user = users.find(user => user.refreshToken === refreshToken)
 
@@ -116,18 +175,19 @@ export const verifyBalance = async (req, res) => {
 export const getCardData = async (req, res) => {
     const { id } = req.user;
 
-    const result = await mySqlPool.query(`SELECT c.id AS id_carte, c.numero, c.montant, s.nom AS nom_stand, t.id AS id_transaction, t.date, t.montant AS montant_transaction, t.carte_id, o.type AS type FROM cartes c LEFT JOIN transactions t ON c.id = t.carte_id LEFT JOIN stands s ON t.stand_id = s.id LEFT JOIN operations o ON t.operation_id = o.id JOIN utilisateurs u ON u.id = c.utilisateur_id WHERE u.id = ? ORDER BY c.id`, [id]);
+    const result = await mySqlPool.query(`SELECT c.id AS id_carte, c.numero, c.is_active, c.montant, s.nom AS nom_stand, t.id AS id_transaction, t.date, t.montant AS montant_transaction, t.carte_id, o.type AS type FROM cartes c LEFT JOIN transactions t ON c.id = t.carte_id LEFT JOIN stands s ON t.stand_id = s.id LEFT JOIN operations o ON t.operation_id = o.id JOIN utilisateurs u ON u.id = c.utilisateur_id WHERE u.id = ? ORDER BY c.id`, [id]);
 
     const cards = result[0];
 
     const groupedCards = cards.reduce((acc, card) => {
-        const { id_carte, numero, montant, id_transaction, date, montant_transaction, type, nom_stand } = card;
+        const { id_carte, numero, montant, id_transaction, is_active, date, montant_transaction, type, nom_stand } = card;
 
         if (!acc[id_carte]) {
             acc[id_carte] = {
                 id_carte,
                 numero,
                 montant,
+                is_active,
                 transactions: []
             };
         }
@@ -152,16 +212,16 @@ export const getCardData = async (req, res) => {
 
 export const addCard = async (req, res) => {
     try {
-        const {login} = req.user;
+        const { id } = req.user;
         const {cardNumber} = req.body;
 
-        const [updateResult] = await mySqlPool.query(`UPDATE cartes SET utilisateur_id = (SELECT id FROM utilisateurs WHERE login = ?) WHERE numero = ? AND utilisateur_id IS NULL`, [login, cardNumber]);
+        const [updateResult] = await mySqlPool.query(`UPDATE cartes SET utilisateur_id = ? WHERE numero = ? AND utilisateur_id IS NULL`, [id, cardNumber]);
 
         if (updateResult.affectedRows === 0) {
             return res.status(401).json({ message: "Carte invalide ou déjà utilisée." });
         }
 
-        const [selectResult] = await mySqlPool.query(`SELECT id AS id_carte, numero, montant FROM cartes WHERE numero = ?`, [cardNumber]);
+        const [selectResult] = await mySqlPool.query(`SELECT id AS id_carte, numero, montant, is_active FROM cartes WHERE numero = ?`, [cardNumber]);
 
         const newCard = selectResult[0];
         newCard.transactions = [];
@@ -169,6 +229,31 @@ export const addCard = async (req, res) => {
         return res.status(200).json({ message: "La carte a été ajoutée avec succès.", newCard });
     } catch (error) {
         console.error("Erreur lors de l'ajout de la carte :", error);
+        return res.status(500).json({ message: "Erreur interne du serveur." });
+    }
+}
+
+export const activateCard = async (req, res) => {
+    try {
+        const {cardNumber, action} = req.body;
+
+        console.log(cardNumber, action);
+
+        const [updateResult] = await mySqlPool.query(`UPDATE cartes SET is_active = ? WHERE numero = ?`, [!action, cardNumber]);
+
+        if (updateResult.affectedRows === 0) {
+            return res.status(404).json({ message: "Carte non trouvée." });
+        }
+
+        const [updatedCard] = await mySqlPool.query(`SELECT id AS id_carte, numero, montant, is_active FROM cartes WHERE numero = ?`, [cardNumber]);
+
+        if (action) {
+            return res.status(200).json({ message: "La carte a été désactivée avec succès.", updatedCard: updatedCard[0]});
+        }
+
+        return res.status(200).json({ message: "La carte a été activée avec succès.", updatedCard: updatedCard[0] });
+    } catch (error) {
+        console.error("Erreur lors de l'activation ou de la désactivation de la carte :", error);
         return res.status(500).json({ message: "Erreur interne du serveur." });
     }
 }

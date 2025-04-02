@@ -7,8 +7,8 @@ export const getStatistics = async (req, res) => {
     console.log("Dans le getStatistics")
 
     if (statistics.length === 0) {
-        return res.status(404).json({ message: "Aucun point vente trouvé" });
+        return res.status(404).json({ message: "Aucun point vente trouvé." });
     }
 
-    res.status(200).json({statistics: statistics, statisticTotal: statisticTotal[0]});
+    res.status(200).json({statistics, statisticTotal: statisticTotal[0]});
 }

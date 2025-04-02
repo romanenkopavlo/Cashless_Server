@@ -4,23 +4,26 @@ import mySqlPool from "../config/db.js";
 
 const users = []
 
-export const login = (req, res) => {
+export const login = async (req, res) => {
     const {login, mdp} = req.body;
     console.log(login, mdp)
     const uuid = crypto.randomUUID()
-    let tokens
-    if (login === "admin" && mdp === "admin") {
-        console.log("tu passes ici")
-        const user = new User(1, uuid, "Quirin", "Robin", "admin", "admin", "admin")
-        tokens = generateTokens(user);
-        user.setRefreshToken(tokens.refreshToken);
-        users.push(user);
-    } else if (login === "user" && mdp === "user") {
-        const user = new User(1, uuid, "Quirin", "Robin", login, mdp, "user")
-        tokens = generateTokens(user);
-        user.setRefreshToken(tokens.refreshToken);
-        users.push(user);
+
+    const [utilisateur] = await mySqlPool.query('SELECT ut.*, p.nom AS role FROM utilisateurs ut JOIN privileges p ON ut.privilege_id = p.id WHERE ut.login = ? AND ut.password = ?', [login, mdp]);
+
+    if(utilisateur.length === 0){
+        console.log("error de la connexion")
+        return res.status(404).json({accessToken: null})
     }
+
+    console.log(utilisateur[0].role)
+
+    let tokens
+
+    const user = new User(1, uuid, utilisateur[0].nom, utilisateur[0].prenom, utilisateur[0].login, utilisateur[0].password, utilisateur[0].role)
+    tokens = generateTokens(user);
+    user.setRefreshToken(tokens.refreshToken);
+    users.push(user);
 
     return res.json({accessToken: tokens.accessToken});
 }
@@ -40,15 +43,15 @@ export const stats = async (req, res) => {
     console.log("dans le stats")
 
     const {tagNFC} = req.body;
-    const [transactions] = await mySqlPool.query('SELECT t.date, t.montant AS price, o.type, s.nom AS stand FROM transactions t LEFT JOIN cartes c ON t.carte_id = c.id LEFT JOIN operations o ON t.operation_id = o.id LEFT JOIN affectations a ON t.affectation_id = a.id LEFT JOIN stands s ON a.stand_id = s.id WHERE c.nfc = ?', [tagNFC]);
-
+    const [transactions] = await mySqlPool.query('SELECT t.date, t.montant AS price, o.type, s.nom, c.montant AS sold, AS stand FROM transactions t LEFT JOIN cartes c ON t.carte_id = c.id LEFT JOIN operations o ON t.operation_id = o.id LEFT JOIN stands s ON t.stand_id = s.id WHERE c.nfc = ?', [tagNFC]);
+    const solde = transactions[0].solde
     console.log(transactions)
 
     if (transactions.length === 0) {
         return res.status(404).json({ message: "Aucune transaction trouvée" });
     }
 
-    res.status(200).json({allTransactions: transactions});
+    res.status(200).json({allTransactions: transactions, solde: solde});
 }
 
 export const checkCard = (req, res) => {
