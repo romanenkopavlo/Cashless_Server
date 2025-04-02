@@ -69,53 +69,57 @@ export const logout = async (req, res) => {
 }
 
 export const updateProfile = async (req, res) => {
-    const {id, nom, prenom, login, passwordCurrent, passwordNew} = req.body
+    try {
+        console.log("dans update profile")
 
-    const [row] = await mySqlPool.query('SELECT * FROM utilisateurs WHERE id = ?', [id])
+        const {id, nom, prenom, login, passwordCurrent, passwordNew} = req.body
 
-    if (row.length === 0) {
-        return res.status(404).json({message: "Utilisateur introuvable."})
-    }
+        const [row] = await mySqlPool.query('SELECT * FROM utilisateurs WHERE id = ?', [id])
 
-    const user = row[0];
+        if (row.length === 0) {
+            return res.status(404).json({message: "Utilisateur introuvable."})
+        }
 
-    if (passwordCurrent !== user.password) {
-        return res.status(401).json({message: "Mot de passe actuel incorrect."})
-    }
+        const user = row[0];
 
-    const [updateResult] = await mySqlPool.query('UPDATE utilisateurs SET nom = ?, prenom = ?, login = ?, password = ? WHERE id = ?', [nom, prenom, login, passwordNew, id]);
+        if (passwordCurrent !== user.password) {
+            return res.status(401).json({message: "Mot de passe actuel incorrect."})
+        }
 
-    if (updateResult.affectedRows === 0) {
-        return res.status(500).json({message: "Échec de la mise à jour."})
-    }
+        const [updateResult] = await mySqlPool.query('UPDATE utilisateurs SET nom = ?, prenom = ?, login = ?, password = ? WHERE id = ?', [nom, prenom, login, passwordNew, id]);
 
-    const [rowUpdatedUser] = await mySqlPool.query('SELECT u.*, p.nom AS role FROM utilisateurs u JOIN privileges p ON u.privilege_id = p.id WHERE u.id = ?', [id]);
-    const updatedUser = rowUpdatedUser[0];
+        if (updateResult.affectedRows === 0) {
+            return res.status(500).json({message: "Échec de la mise à jour."})
+        }
 
-    console.log("USERS UPDATE PROFILE")
-    console.log(users)
+        const [rowUpdatedUser] = await mySqlPool.query('SELECT u.*, p.nom AS role FROM utilisateurs u JOIN privileges p ON u.privilege_id = p.id WHERE u.id = ?', [id]);
+        const updatedUser = rowUpdatedUser[0];
 
-    const userIndex = users.findIndex(user => user.id === updatedUser.id);
+        const userIndex = users.findIndex(user => user.idutilisateur === updatedUser.id);
 
-    if (userIndex !== -1) {
-        users[userIndex].uuid = updatedUser.uuid;
-        users[userIndex].nom = updatedUser.nom;
-        users[userIndex].prenom = updatedUser.prenom;
-        users[userIndex].login = updatedUser.login;
-        users[userIndex].password = updatedUser.password;
-        users[userIndex].role = updatedUser.role;
+        if (userIndex !== -1) {
+            users[userIndex].uuid = updatedUser.uuid;
+            users[userIndex].nom = updatedUser.nom;
+            users[userIndex].prenom = updatedUser.prenom;
+            users[userIndex].login = updatedUser.login;
+            users[userIndex].password = updatedUser.password;
+            users[userIndex].role = updatedUser.role;
 
-        const tokens = generateTokens(users[userIndex]);
-        users[userIndex].setRefreshToken(tokens.refreshToken);
+            const tokens = generateTokens(users[userIndex]);
+            users[userIndex].setRefreshToken(tokens.refreshToken);
 
-        res.cookie('refreshToken', tokens.refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production'
-        });
+            res.cookie('refreshToken', tokens.refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production'
+            });
 
-        res.json({token: tokens.accessToken});
-    } else {
-        return res.status(404).json({message: "Utilisateur non trouvé dans la session."})
+            res.json({message: "Votre profil a été modifié avec succés.", token: {token: tokens.accessToken}});
+        } else {
+            return res.status(404).json({message: "Utilisateur non trouvé dans la session."})
+        }
+    } catch (error) {
+        console.error("Erreur lors de l'ajout de la carte :", error);
+        return res.status(500).json({ message: "Erreur interne du serveur." });
     }
 }
 

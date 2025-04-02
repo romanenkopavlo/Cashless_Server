@@ -108,7 +108,7 @@ export const debiter = async (req, res) => {
     if (regex.test(tag)) {
         const [recupererLaCarte] = await mySqlPool.query('SELECT * FROM cartes WHERE nfc = ?', [tag])
 
-        if (!recupererLaCarte) {
+        if (!recupererLaCarte[0]) {
             return res.status(401).json({solde: null, approved: null, name: null, message: "Erreur de la carte"})
         }
 
