@@ -86,6 +86,10 @@ export const updateProfile = async (req, res) => {
             return res.status(401).json({message: "Mot de passe actuel incorrect."})
         }
 
+        if (await verifyUserUpdate(id, login)) {
+            return res.status(401).json({message: "L'utilisateur avec ce login déja existe."})
+        }
+
         const [updateResult] = await mySqlPool.query('UPDATE utilisateurs SET nom = ?, prenom = ?, login = ?, password = ? WHERE id = ?', [nom, prenom, login, passwordNew, id]);
 
         if (updateResult.affectedRows === 0) {
@@ -121,6 +125,15 @@ export const updateProfile = async (req, res) => {
         console.error("Erreur lors de l'ajout de la carte :", error);
         return res.status(500).json({ message: "Erreur interne du serveur." });
     }
+}
+
+const verifyUserUpdate = async (id_user, username) => {
+    const resultUser = await mySqlPool.query('SELECT * FROM utilisateurs WHERE login = ?', [username])
+    const user = resultUser[0][0]
+    if (user) {
+        return id_user !== user.id;
+    }
+    return false
 }
 
 export const getNewAccessToken = async (req, res) => {

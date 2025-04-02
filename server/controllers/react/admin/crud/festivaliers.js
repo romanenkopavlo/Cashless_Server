@@ -19,7 +19,7 @@ export const createFestivalier = async (req, res) => {
     const id_role = 3
 
     if (await verifyFestivalierCreate(username)) {
-        return res.status(401).json({message: "Le festivalier avec ce login déja existe"})
+        return res.status(401).json({message: "Le festivalier avec ce login déja existe."})
     }
 
     const resultInsert = await mySqlPool.query('INSERT INTO utilisateurs (nom, prenom, login, password, privilege_id) VALUES (?, ?, ?, ?, ?)', [nom, prenom, username, password, id_role])
@@ -40,7 +40,7 @@ export const updateFestivalier = async (req, res) => {
     const {id_festivalier, nom, prenom, username, role} = req.body;
 
     if (await verifyFestivalierUpdate(id_festivalier, username)) {
-        return res.status(401).json({message: "Le festivalier avec ce nom déja existe"})
+        return res.status(401).json({message: "Le festivalier avec ce login déja existe."})
     }
 
     let resultUpdate
