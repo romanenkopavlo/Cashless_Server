@@ -45,6 +45,7 @@ export const login = async (req, res) => {
         user.setRefreshToken(tokens.refreshToken);
         users.push(user);
 
+        console.log("USERS DANS LOGIN")
         console.log(users)
 
         res.cookie('refreshToken', tokens.refreshToken, {
@@ -70,9 +71,6 @@ export const logout = async (req, res) => {
 export const updateProfile = async (req, res) => {
     const {id, nom, prenom, login, passwordCurrent, passwordNew} = req.body
 
-    console.log("Dans update profile")
-    console.log(users)
-
     const [row] = await mySqlPool.query('SELECT * FROM utilisateurs WHERE id = ?', [id])
 
     if (row.length === 0) {
@@ -94,6 +92,7 @@ export const updateProfile = async (req, res) => {
     const [rowUpdatedUser] = await mySqlPool.query('SELECT u.*, p.nom AS role FROM utilisateurs u JOIN privileges p ON u.privilege_id = p.id WHERE u.id = ?', [id]);
     const updatedUser = rowUpdatedUser[0];
 
+    console.log("USERS UPDATE PROFILE")
     console.log(users)
 
     const userIndex = users.findIndex(user => user.id === updatedUser.id);
