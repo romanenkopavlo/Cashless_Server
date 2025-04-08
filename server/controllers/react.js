@@ -41,6 +41,7 @@ export const login = async (req, res) => {
     }
 
     const newUuid = uuidv4();
+    console.log(newUuid)
     const tokens = generateTokens(user, newUuid);
 
     const [row] = await mySqlPool.query('INSERT INTO sessions (utilisateur_id, uuid) VALUES (?, ?)', [user.id, newUuid]);
@@ -49,7 +50,7 @@ export const login = async (req, res) => {
         return res.json(500).json({message: "Erreur lors de la création de la session."})
     }
 
-    res.cookie('refreshToken', tokens.refreshToken, {
+    res.cookie(`refreshToken-${newUuid}`, tokens.refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production'
     });
