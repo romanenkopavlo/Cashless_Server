@@ -18,6 +18,10 @@ export const createFestivalier = async (req, res) => {
     const {nom, prenom, username, password} = req.body;
     const id_role = 3
 
+    if (!password) {
+        return res.status(401).json({message: "Le mot de passe est obligatoire."});
+    }
+
     if (await verifyFestivalierCreate(username)) {
         return res.status(401).json({message: "Le festivalier avec ce login déja existe."})
     }

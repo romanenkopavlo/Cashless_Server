@@ -41,16 +41,17 @@ export const login = async (req, res) => {
     }
 
     const newUuid = uuidv4();
-    console.log(newUuid)
     const tokens = generateTokens(user, newUuid);
 
+    console.log("UUID dans le login");
+    console.log(newUuid)
     const [row] = await mySqlPool.query('INSERT INTO sessions (utilisateur_id, uuid) VALUES (?, ?)', [user.id, newUuid]);
 
     if (row.affectedRows === 0) {
         return res.json(500).json({message: "Erreur lors de la création de la session."})
     }
 
-    res.cookie(`refreshToken-${newUuid}`, tokens.refreshToken, {
+    res.cookie('refreshToken', tokens.refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production'
     });
@@ -82,25 +83,49 @@ export const updateProfile = async (req, res) => {
     try {
         console.log("Dans update profile")
 
+        const refreshToken = req.cookies.refreshToken
         const {id, nom, prenom, login, passwordCurrent, passwordNew} = req.body
 
-        const [row] = await mySqlPool.query('SELECT * FROM utilisateurs WHERE id = ?', [id])
+        if (!refreshToken) {
+            console.log(refreshToken);
+            return res.status(504).json({message: 'Refresh token is required'});
+        }
+
+        const payload = jwt.decode(refreshToken);
+
+        let oldUuid = null;
+
+        if (payload) {
+            oldUuid = payload.uuid
+        }
+
+        const [row] = await mySqlPool.query('SELECT * FROM utilisateurs WHERE id = ?', [id]);
 
         if (row.length === 0) {
             return res.status(404).json({message: "Utilisateur introuvable."})
         }
 
-        const user = row[0];
-
         if (await verifyUserUpdate(id, login)) {
             return res.status(401).json({message: "L'utilisateur avec ce login déja existe."})
         }
 
-        if (passwordCurrent !== user.password) {
+        const user = row[0];
+
+        if (passwordCurrent && passwordNew && (passwordCurrent !== user.password)) {
             return res.status(401).json({message: "Mot de passe actuel incorrect."})
         }
 
-        const [updateResult] = await mySqlPool.query('UPDATE utilisateurs SET nom = ?, prenom = ?, login = ?, password = ? WHERE id = ?', [nom, prenom, login, passwordNew, id]);
+        if (passwordNew && !passwordCurrent) {
+            return res.status(401).json({message: "Pour modifier votre mot de passe, veuillez d'abord renseigner votre mot de passe actuel."})
+        }
+
+        let updateResult;
+
+        if (passwordNew) {
+            [updateResult] = await mySqlPool.query('UPDATE utilisateurs SET nom = ?, prenom = ?, login = ?, password = ? WHERE id = ?', [nom, prenom, login, passwordNew, id]);
+        } else {
+            [updateResult] = await mySqlPool.query('UPDATE utilisateurs SET nom = ?, prenom = ?, login = ? WHERE id = ?', [nom, prenom, login, id])
+        }
 
         if (updateResult.affectedRows === 0) {
             return res.status(500).json({message: "Échec de la mise à jour."})
@@ -112,10 +137,10 @@ export const updateProfile = async (req, res) => {
         const newUuid = uuidv4();
         const tokens = generateTokens(updatedUser, newUuid);
 
-        const [update_session_row] = await mySqlPool.query('UPDATE sessions SET uuid = ? WHERE utilisateur_id = ?', [newUuid, id]);
+        const [update_session_row] = await mySqlPool.query('UPDATE sessions SET uuid = ? WHERE utilisateur_id = ? AND uuid = ?', [newUuid, id, oldUuid]);
 
         if (update_session_row.affectedRows === 0) {
-            return res.status(500).json({message: "Utilisateur introuvable."})
+            return res.status(500).json({message: "Utilisateur ou session introuvables."})
         }
 
         res.cookie('refreshToken', tokens.refreshToken, {
@@ -125,7 +150,7 @@ export const updateProfile = async (req, res) => {
 
         return res.status(200).json({message: "Votre profil a été modifié avec succés.", token: {token: tokens.accessToken}});
     } catch (error) {
-        console.error("Erreur lors de l'ajout de la carte :", error);
+        console.error("Erreur lors de la connexion :", error);
         return res.status(500).json({ message: "Erreur interne du serveur." });
     }
 }
@@ -150,19 +175,38 @@ export const getNewAccessToken = async (req, res) => {
     try {
         const payload = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
 
+        console.log("PAYLOAD")
+        console.log(payload.uuid)
+        console.log(payload.id)
+        const [sessions] = await mySqlPool.query("SELECT * FROM sessions");
+
         const [row] = await mySqlPool.query("SELECT * FROM sessions WHERE utilisateur_id = ? AND uuid = ?", [payload.id, payload.uuid]);
 
+        console.log("ROW")
+        console.log(row)
+
         if (row.length === 0) {
+            console.log("here")
             return res.status(404).json({message: "Session non trouvée."});
         }
 
         payload.exp = payload.exp - (Date.now() / 1000);
 
         const newUuid = uuidv4();
+        const oldUuid = payload.uuid;
+
+        console.log("NEW UUID")
+        console.log(newUuid)
+        console.log("OLD UUID")
+        console.log(oldUuid)
+
         const newAccessToken = jwt.sign({id: payload.id, login: payload.login, nom: payload.nom, prenom: payload.prenom, role: payload.role}, process.env.ACCESS_TOKEN_SECRET, {expiresIn: process.env.ACCESS_TOKEN_EXPIRATION})
         const newRefreshToken = jwt.sign({id: payload.id, uuid: newUuid, login: payload.login, nom: payload.nom, prenom: payload.prenom, role: payload.role}, process.env.REFRESH_TOKEN_SECRET, {expiresIn: `${payload.exp}s`});
 
-        const [update_session_row] = await mySqlPool.query('UPDATE sessions SET uuid = ? WHERE utilisateur_id = ?', [newUuid, payload.id]);
+        const [update_session_row] = await mySqlPool.query('UPDATE sessions SET uuid = ? WHERE utilisateur_id = ? AND uuid = ?', [newUuid, payload.id, oldUuid]);
+
+        console.log("Update row")
+        console.log(update_session_row)
 
         if (update_session_row.affectedRows === 0) {
             return res.status(500).json({message: "Utilisateur introuvable."})

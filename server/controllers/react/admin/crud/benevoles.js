@@ -22,7 +22,10 @@ export const createBenevole = async (req, res) => {
     const nomPrivilege = "Bénévole";
     const [resultRole] = await mySqlPool.query('SELECT * FROM privileges WHERE nom = ?', [nomPrivilege])
     const id_role = resultRole[0].id
-    console.log("Role id: " + id_role)
+
+    if (!password) {
+        return res.status(401).json({message: "Le mot de passe est obligatoire."})
+    }
 
     if (await verifyBenevoleCreate(username)) {
         return res.status(401).json({message: "L'utilisateur avec ce login déja existe"})
