@@ -87,7 +87,6 @@ export const updateProfile = async (req, res) => {
         const {id, nom, prenom, login, passwordCurrent, passwordNew} = req.body
 
         if (!refreshToken) {
-            console.log(refreshToken);
             return res.status(504).json({message: 'Refresh token is required'});
         }
 
@@ -168,25 +167,15 @@ export const getNewAccessToken = async (req, res) => {
     const refreshToken = req.cookies.refreshToken;
 
     if (!refreshToken) {
-        console.log(refreshToken);
         return res.status(504).json({message: 'Refresh token is required'});
     }
 
     try {
         const payload = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
 
-        console.log("PAYLOAD")
-        console.log(payload.uuid)
-        console.log(payload.id)
-        const [sessions] = await mySqlPool.query("SELECT * FROM sessions");
-
         const [row] = await mySqlPool.query("SELECT * FROM sessions WHERE utilisateur_id = ? AND uuid = ?", [payload.id, payload.uuid]);
 
-        console.log("ROW")
-        console.log(row)
-
         if (row.length === 0) {
-            console.log("here")
             return res.status(404).json({message: "Session non trouvée."});
         }
 
@@ -195,21 +184,13 @@ export const getNewAccessToken = async (req, res) => {
         const newUuid = uuidv4();
         const oldUuid = payload.uuid;
 
-        console.log("NEW UUID")
-        console.log(newUuid)
-        console.log("OLD UUID")
-        console.log(oldUuid)
-
         const newAccessToken = jwt.sign({id: payload.id, login: payload.login, nom: payload.nom, prenom: payload.prenom, role: payload.role}, process.env.ACCESS_TOKEN_SECRET, {expiresIn: process.env.ACCESS_TOKEN_EXPIRATION})
         const newRefreshToken = jwt.sign({id: payload.id, uuid: newUuid, login: payload.login, nom: payload.nom, prenom: payload.prenom, role: payload.role}, process.env.REFRESH_TOKEN_SECRET, {expiresIn: `${payload.exp}s`});
 
         const [update_session_row] = await mySqlPool.query('UPDATE sessions SET uuid = ? WHERE utilisateur_id = ? AND uuid = ?', [newUuid, payload.id, oldUuid]);
 
-        console.log("Update row")
-        console.log(update_session_row)
-
         if (update_session_row.affectedRows === 0) {
-            return res.status(500).json({message: "Utilisateur introuvable."})
+            return res.status(500).json({message: "Utilisateur ou session introuvables."})
         }
 
         res.cookie('refreshToken', newRefreshToken, {
