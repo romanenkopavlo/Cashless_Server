@@ -1,13 +1,17 @@
 import {Router} from 'express';
-import {checkCard, crediter, debiter, login, products, stats} from '../controllers/android.js';
 import {authenticateAndroidJWT} from "../middleware/authMiddlewareAndroid.js";
+import {login} from "../controllers/android/connection.js";
+import {crediter, debiter} from "../controllers/android/carte_operations.js";
+import {products} from "../controllers/android/products.js";
+import {stats} from "../controllers/android/stats.js";
+
 const routerAndroid = Router();
 
-routerAndroid.get('/products', products)
-routerAndroid.post('/stats', stats)
-routerAndroid.post('/loginAd', login)
-routerAndroid.post('/credit', authenticateAndroidJWT, crediter)
-routerAndroid.post('/debit', debiter)
-routerAndroid.post('/checkCard', checkCard)
+routerAndroid.get('/products', authenticateAndroidJWT, products);
+
+routerAndroid.post('/login', login);
+routerAndroid.post('/stats', authenticateAndroidJWT, stats);
+routerAndroid.post('/debit', authenticateAndroidJWT, debiter);
+routerAndroid.post('/credit', authenticateAndroidJWT, crediter);
 
 export default routerAndroid;

@@ -1,7 +1,7 @@
-import {generateTokens} from '../utils/jwtUtil.js';
+import mySqlPool from "../../../config/db.js";
+import {v4 as uuidv4} from "uuid";
+import {generateTokens} from "../../../utils/jwtUtil.js";
 import jwt from "jsonwebtoken";
-import mySqlPool from "../config/db.js";
-import { v4 as uuidv4 } from 'uuid';
 
 export const signup = async (req, res) => {
     const {name, surname, login, password} = req.body;
@@ -40,8 +40,16 @@ export const login = async (req, res) => {
         return res.status(401).json({message: 'Invalid credentials'});
     }
 
+    let tokens;
     const newUuid = uuidv4();
-    const tokens = generateTokens(user, newUuid);
+
+    if (user.role === "Bénévole") {
+        const [dataBenevole] = await mySqlPool.query("SELECT u.id, u.nom, u.prenom, u.login, p.nom AS role, GROUP_CONCAT(s.nom ORDER BY a.stand_id SEPARATOR ', ') AS noms_stands, GROUP_CONCAT(s.id ORDER BY a.stand_id SEPARATOR ', ') AS ids_stands, GROUP_CONCAT(per.nom ORDER BY a.stand_id SEPARATOR ', ') AS noms_permissions FROM utilisateurs u JOIN privileges p ON u.privilege_id = p.id LEFT JOIN affectations a ON u.id = a.utilisateur_id LEFT JOIN stands s ON a.stand_id = s.id LEFT JOIN permissions per ON a.permission_id = per.id WHERE u.id = ? GROUP BY u.id, u.nom, u.prenom, u.login", [user.id]);
+        const benevole = dataBenevole[0];
+        tokens = generateTokens(benevole, newUuid)
+    } else {
+        tokens = generateTokens(user, newUuid)
+    }
 
     console.log("UUID dans le login");
     console.log(newUuid)
@@ -55,6 +63,13 @@ export const login = async (req, res) => {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production'
     });
+
+    console.log("access token : ")
+
+    console.log(tokens.accessToken)
+
+    console.log("decoded token : ")
+    console.log(jwt.decode(tokens.accessToken))
 
     return res.json({token: tokens.accessToken});
 }
@@ -133,8 +148,16 @@ export const updateProfile = async (req, res) => {
         const [rowUpdatedUser] = await mySqlPool.query('SELECT u.*, p.nom AS role FROM utilisateurs u JOIN privileges p ON u.privilege_id = p.id WHERE u.id = ?', [id]);
         const updatedUser = rowUpdatedUser[0];
 
+        let tokens;
         const newUuid = uuidv4();
-        const tokens = generateTokens(updatedUser, newUuid);
+
+        if (updatedUser.role === "Bénévole") {
+            const [dataBenevole] = await mySqlPool.query("SELECT u.id, u.nom, u.prenom, u.login, p.nom AS role, GROUP_CONCAT(s.nom ORDER BY a.stand_id SEPARATOR ', ') AS noms_stands, GROUP_CONCAT(s.id ORDER BY a.stand_id SEPARATOR ', ') AS ids_stands, GROUP_CONCAT(per.nom ORDER BY a.stand_id SEPARATOR ', ') AS noms_permissions FROM utilisateurs u JOIN privileges p ON u.privilege_id = p.id LEFT JOIN affectations a ON u.id = a.utilisateur_id LEFT JOIN stands s ON a.stand_id = s.id LEFT JOIN permissions per ON a.permission_id = per.id WHERE u.id = ? GROUP BY u.id, u.nom, u.prenom, u.login", [updatedUser.id]);
+            const benevole = dataBenevole[0];
+            tokens = generateTokens(benevole, newUuid)
+        } else {
+            tokens = generateTokens(updatedUser, newUuid)
+        }
 
         const [update_session_row] = await mySqlPool.query('UPDATE sessions SET uuid = ? WHERE utilisateur_id = ? AND uuid = ?', [newUuid, id, oldUuid]);
 
@@ -166,6 +189,8 @@ const verifyUserUpdate = async (id_user, username) => {
 export const getNewAccessToken = async (req, res) => {
     const refreshToken = req.cookies.refreshToken;
 
+    console.log("dans le getNewAccessToken")
+
     if (!refreshToken) {
         return res.status(504).json({message: 'Refresh token is required'});
     }
@@ -184,8 +209,11 @@ export const getNewAccessToken = async (req, res) => {
         const newUuid = uuidv4();
         const oldUuid = payload.uuid;
 
-        const newAccessToken = jwt.sign({id: payload.id, login: payload.login, nom: payload.nom, prenom: payload.prenom, role: payload.role}, process.env.ACCESS_TOKEN_SECRET, {expiresIn: process.env.ACCESS_TOKEN_EXPIRATION})
-        const newRefreshToken = jwt.sign({id: payload.id, uuid: newUuid, login: payload.login, nom: payload.nom, prenom: payload.prenom, role: payload.role}, process.env.REFRESH_TOKEN_SECRET, {expiresIn: `${payload.exp}s`});
+        console.log("payload dans le getNewAccessToken")
+        console.log(payload)
+
+        const newAccessToken = jwt.sign({id: payload.id, login: payload.login, nom: payload.nom, prenom: payload.prenom, role: payload.role, noms_stands: payload.noms_stands, noms_permissions: payload.noms_permissions}, process.env.ACCESS_TOKEN_SECRET, {expiresIn: process.env.ACCESS_TOKEN_EXPIRATION})
+        const newRefreshToken = jwt.sign({id: payload.id, uuid: newUuid, login: payload.login, nom: payload.nom, prenom: payload.prenom, role: payload.role, noms_stands: payload.noms_stands, noms_permissions: payload.noms_permissions}, process.env.REFRESH_TOKEN_SECRET, {expiresIn: `${payload.exp}s`});
 
         const [update_session_row] = await mySqlPool.query('UPDATE sessions SET uuid = ? WHERE utilisateur_id = ? AND uuid = ?', [newUuid, payload.id, oldUuid]);
 
@@ -212,101 +240,5 @@ export const getNewAccessToken = async (req, res) => {
             secure: process.env.NODE_ENV === "production",
         })
         res.status(504).json({error: 'Invalid or expired refresh token'});
-    }
-}
-
-export const verifyBalance = async (req, res) => {
-    const {role} = req.user;
-
-    if (role === "admin") {
-        res.json({balance: 3000})
-    } else {
-        res.status(401).json({message: 'Invalid role'});
-    }
-}
-
-export const getCardData = async (req, res) => {
-    const { id } = req.user;
-
-    const result = await mySqlPool.query(`SELECT c.id AS id_carte, c.numero, c.is_active, c.montant, s.nom AS nom_stand, t.id AS id_transaction, t.date, t.montant AS montant_transaction, t.carte_id, o.type AS type FROM cartes c LEFT JOIN transactions t ON c.id = t.carte_id LEFT JOIN stands s ON t.stand_id = s.id LEFT JOIN operations o ON t.operation_id = o.id JOIN utilisateurs u ON u.id = c.utilisateur_id WHERE u.id = ? ORDER BY c.id`, [id]);
-
-    const cards = result[0];
-
-    const groupedCards = cards.reduce((acc, card) => {
-        const { id_carte, numero, montant, id_transaction, is_active, date, montant_transaction, type, nom_stand } = card;
-
-        if (!acc[id_carte]) {
-            acc[id_carte] = {
-                id_carte,
-                numero,
-                montant,
-                is_active,
-                transactions: []
-            };
-        }
-
-        if (id_transaction) {
-            acc[id_carte].transactions.push({
-                id_transaction,
-                date,
-                montant_transaction,
-                type,
-                nom_stand
-            });
-        }
-
-        return acc;
-    }, {});
-
-    const finalCards = Object.values(groupedCards);
-
-    return res.status(200).json(finalCards);
-};
-
-export const addCard = async (req, res) => {
-    try {
-        const { id } = req.user;
-        const {cardNumber} = req.body;
-
-        const [updateResult] = await mySqlPool.query(`UPDATE cartes SET utilisateur_id = ? WHERE numero = ? AND utilisateur_id IS NULL`, [id, cardNumber]);
-
-        if (updateResult.affectedRows === 0) {
-            return res.status(401).json({ message: "Carte invalide ou déjà utilisée." });
-        }
-
-        const [selectResult] = await mySqlPool.query(`SELECT id AS id_carte, numero, montant, is_active FROM cartes WHERE numero = ?`, [cardNumber]);
-
-        const newCard = selectResult[0];
-        newCard.transactions = [];
-
-        return res.status(200).json({ message: "La carte a été ajoutée avec succès.", newCard });
-    } catch (error) {
-        console.error("Erreur lors de l'ajout de la carte :", error);
-        return res.status(500).json({ message: "Erreur interne du serveur." });
-    }
-}
-
-export const activateCard = async (req, res) => {
-    try {
-        const {cardNumber, action} = req.body;
-
-        console.log(cardNumber, action);
-
-        const [updateResult] = await mySqlPool.query(`UPDATE cartes SET is_active = ? WHERE numero = ?`, [!action, cardNumber]);
-
-        if (updateResult.affectedRows === 0) {
-            return res.status(404).json({ message: "Carte non trouvée." });
-        }
-
-        const [updatedCard] = await mySqlPool.query(`SELECT id AS id_carte, numero, montant, is_active FROM cartes WHERE numero = ?`, [cardNumber]);
-
-        if (action) {
-            return res.status(200).json({ message: "La carte a été désactivée avec succès.", updatedCard: updatedCard[0]});
-        }
-
-        return res.status(200).json({ message: "La carte a été activée avec succès.", updatedCard: updatedCard[0] });
-    } catch (error) {
-        console.error("Erreur lors de l'activation ou de la désactivation de la carte :", error);
-        return res.status(500).json({ message: "Erreur interne du serveur." });
     }
 }
