@@ -18,8 +18,12 @@ export const createFestivalier = async (req, res) => {
     const {nom, prenom, username, password} = req.body;
     const id_role = 3
 
+    if (!password) {
+        return res.status(401).json({message: "Le mot de passe est obligatoire."});
+    }
+
     if (await verifyFestivalierCreate(username)) {
-        return res.status(401).json({message: "Le festivalier avec ce login déja existe"})
+        return res.status(401).json({message: "Le festivalier avec ce login déja existe."})
     }
 
     const resultInsert = await mySqlPool.query('INSERT INTO utilisateurs (nom, prenom, login, password, privilege_id) VALUES (?, ?, ?, ?, ?)', [nom, prenom, username, password, id_role])
@@ -37,34 +41,56 @@ export const createFestivalier = async (req, res) => {
 }
 
 export const updateFestivalier = async (req, res) => {
-    const {id_festivalier, nom, prenom, username} = req.body;
+    const {id_festivalier, nom, prenom, username, role} = req.body;
 
     if (await verifyFestivalierUpdate(id_festivalier, username)) {
-        return res.status(401).json({message: "Le festivalier avec ce nom déja existe"})
+        return res.status(401).json({message: "Le festivalier avec ce login déja existe."})
     }
 
-    const resultUpdate = await mySqlPool.query('UPDATE utilisateurs SET nom = ?, prenom = ?, login = ? WHERE id = ?', [nom, prenom, username, id_festivalier])
+    let resultUpdate
 
-    if (!resultUpdate) {
-        return res.status(401).json({message: "L'erreur lors de la modification dans la base de données"})
+    if (role) {
+        const getPrivilege = await mySqlPool.query('SELECT * FROM privileges p WHERE p.nom = ?', [role])
+        const idPrivilege = getPrivilege[0][0].id
+        resultUpdate = await mySqlPool.query('UPDATE utilisateurs SET privilege_id = ? WHERE id = ?', [idPrivilege, id_festivalier])
+        if (!resultUpdate) {
+            return res.status(401).json({message: "L'erreur lors de la modification dans la base de données"})
+        }
+        return res.status(200).json({message: "Le rôle a été modifié"})
+    } else {
+        resultUpdate = await mySqlPool.query('UPDATE utilisateurs SET nom = ?, prenom = ?, login = ? WHERE id = ?', [nom, prenom, username, id_festivalier])
+
+        if (!resultUpdate) {
+            return res.status(401).json({message: "L'erreur lors de la modification dans la base de données"})
+        }
+
+        const [updatedFestivalier] = await mySqlPool.query('SELECT * FROM utilisateurs WHERE id = ?', [id_festivalier]);
+
+        console.log(updatedFestivalier[0])
+
+        return res.status(200).json({message: "Le festivalier a été modifié", updatedFestivalier: updatedFestivalier[0] || null})
     }
-
-    const [updatedFestivalier] = await mySqlPool.query('SELECT * FROM utilisateurs WHERE id = ?', [id_festivalier]);
-
-    console.log(updatedFestivalier[0])
-
-    return res.status(200).json({message: "Le festivalier a été modifié", updatedFestivalier: updatedFestivalier[0] || null})
 }
 
 export const deleteFestivalier = async (req, res) => {
     const {id_festivalier} = req.body
+
+    const [row] = await mySqlPool.query('SELECT COUNT(*) AS nombre_cartes FROM cartes WHERE utilisateur_id = ?', [id_festivalier])
+
+    if (row.length === 0) {
+        return res.status(404).json({ message: "Utilisateur non trouvé." });
+    }
+
+    if (row[0].nombre_cartes > 0) {
+        return res.status(409).json({ message: "Impossible de supprimer cet utilisateur car des cartes lui sont associées."});
+    }
 
     const resultDelete = await mySqlPool.query('DELETE FROM utilisateurs WHERE id = ?', [id_festivalier])
 
     if (!resultDelete) {
         return res.status(401).json({message: "L'erreur lors de la suppression dans la base de données"})
     }
-    return res.status(200).json({message: "Le festivalier a ete supprime"})
+    return res.status(200).json({message: "Le festivalier a été supprimé"})
 }
 
 const verifyFestivalierCreate = async (username) => {

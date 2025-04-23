@@ -1,0 +1,244 @@
+import mySqlPool from "../../../config/db.js";
+import {v4 as uuidv4} from "uuid";
+import {generateTokens} from "../../../utils/jwtUtil.js";
+import jwt from "jsonwebtoken";
+
+export const signup = async (req, res) => {
+    const {name, surname, login, password} = req.body;
+    const resultUser = await mySqlPool.query('SELECT * FROM utilisateurs u WHERE u.login = ?', [login]);
+
+    const user = resultUser[0][0]
+
+    if (!user) {
+        const nomPrivilege = "Visiteur"
+        const getPrivilege = await mySqlPool.query('SELECT * FROM privileges p WHERE p.nom = ?', [nomPrivilege])
+        const idPrivilege = getPrivilege[0][0].id
+
+        if (!idPrivilege) {
+            return res.status(401).json({message: "L'erreur lors de la recuperation du privilege dans la base de données"})
+        }
+
+        const resultInsert = await mySqlPool.query(`INSERT INTO utilisateurs (nom, prenom, login, password, privilege_id) VALUES (?, ?, ?, ?, ?)`, [surname, name, login, password, idPrivilege]);
+
+        if (!resultInsert) {
+            return res.status(401).json({message: "L'erreur lors de l'ajout dans la base de données"})
+        }
+
+        return res.status(200).json({message: "Le compte a été créé!"})
+    } else {
+        return res.status(401).json({message: `L'utilisateur avec login ${login} déja existe`})
+    }
+}
+
+export const login = async (req, res) => {
+    const {username, password} = req.body;
+    const [dataUser] = await mySqlPool.query('SELECT u.*, p.nom AS role FROM utilisateurs u JOIN privileges p ON u.privilege_id = p.id WHERE u.login = ? AND u.password = ?', [username, password])
+
+    const user = dataUser[0]
+
+    if (!user) {
+        return res.status(401).json({message: 'Invalid credentials'});
+    }
+
+    let tokens;
+    const newUuid = uuidv4();
+
+    if (user.role === "Bénévole") {
+        const [dataBenevole] = await mySqlPool.query("SELECT u.id, u.nom, u.prenom, u.login, p.nom AS role, GROUP_CONCAT(s.nom ORDER BY a.stand_id SEPARATOR ', ') AS noms_stands, GROUP_CONCAT(s.id ORDER BY a.stand_id SEPARATOR ', ') AS ids_stands, GROUP_CONCAT(per.nom ORDER BY a.stand_id SEPARATOR ', ') AS noms_permissions FROM utilisateurs u JOIN privileges p ON u.privilege_id = p.id LEFT JOIN affectations a ON u.id = a.utilisateur_id LEFT JOIN stands s ON a.stand_id = s.id LEFT JOIN permissions per ON a.permission_id = per.id WHERE u.id = ? GROUP BY u.id, u.nom, u.prenom, u.login", [user.id]);
+        const benevole = dataBenevole[0];
+        tokens = generateTokens(benevole, newUuid)
+    } else {
+        tokens = generateTokens(user, newUuid)
+    }
+
+    console.log("UUID dans le login");
+    console.log(newUuid)
+    const [row] = await mySqlPool.query('INSERT INTO sessions (utilisateur_id, uuid) VALUES (?, ?)', [user.id, newUuid]);
+
+    if (row.affectedRows === 0) {
+        return res.json(500).json({message: "Erreur lors de la création de la session."})
+    }
+
+    res.cookie('refreshToken', tokens.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production'
+    });
+
+    console.log("access token : ")
+
+    console.log(tokens.accessToken)
+
+    console.log("decoded token : ")
+    console.log(jwt.decode(tokens.accessToken))
+
+    return res.json({token: tokens.accessToken});
+}
+
+export const logout = async (req, res) => {
+    console.log("demande de logout");
+    const token = req.cookies.refreshToken;
+
+    if (!token) return res.status(400).json({ message: "Token manquant." });
+
+    const payload = jwt.decode(token);
+
+    if (payload) {
+        await mySqlPool.query('DELETE FROM sessions WHERE utilisateur_id = ? AND uuid = ?', [payload.id, payload.uuid]);
+    }
+
+    res.clearCookie('refreshToken', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+    })
+
+    res.status(204).send();
+}
+
+export const updateProfile = async (req, res) => {
+    try {
+        console.log("Dans update profile")
+
+        const refreshToken = req.cookies.refreshToken
+        const {id, nom, prenom, login, passwordCurrent, passwordNew} = req.body
+
+        if (!refreshToken) {
+            return res.status(504).json({message: 'Refresh token is required'});
+        }
+
+        const payload = jwt.decode(refreshToken);
+
+        let oldUuid = null;
+
+        if (payload) {
+            oldUuid = payload.uuid
+        }
+
+        const [row] = await mySqlPool.query('SELECT * FROM utilisateurs WHERE id = ?', [id]);
+
+        if (row.length === 0) {
+            return res.status(404).json({message: "Utilisateur introuvable."})
+        }
+
+        if (await verifyUserUpdate(id, login)) {
+            return res.status(401).json({message: "L'utilisateur avec ce login déja existe."})
+        }
+
+        const user = row[0];
+
+        if (passwordCurrent && passwordNew && (passwordCurrent !== user.password)) {
+            return res.status(401).json({message: "Mot de passe actuel incorrect."})
+        }
+
+        if (passwordNew && !passwordCurrent) {
+            return res.status(401).json({message: "Pour modifier votre mot de passe, veuillez d'abord renseigner votre mot de passe actuel."})
+        }
+
+        let updateResult;
+
+        if (passwordNew) {
+            [updateResult] = await mySqlPool.query('UPDATE utilisateurs SET nom = ?, prenom = ?, login = ?, password = ? WHERE id = ?', [nom, prenom, login, passwordNew, id]);
+        } else {
+            [updateResult] = await mySqlPool.query('UPDATE utilisateurs SET nom = ?, prenom = ?, login = ? WHERE id = ?', [nom, prenom, login, id])
+        }
+
+        if (updateResult.affectedRows === 0) {
+            return res.status(500).json({message: "Échec de la mise à jour."})
+        }
+
+        const [rowUpdatedUser] = await mySqlPool.query('SELECT u.*, p.nom AS role FROM utilisateurs u JOIN privileges p ON u.privilege_id = p.id WHERE u.id = ?', [id]);
+        const updatedUser = rowUpdatedUser[0];
+
+        let tokens;
+        const newUuid = uuidv4();
+
+        if (updatedUser.role === "Bénévole") {
+            const [dataBenevole] = await mySqlPool.query("SELECT u.id, u.nom, u.prenom, u.login, p.nom AS role, GROUP_CONCAT(s.nom ORDER BY a.stand_id SEPARATOR ', ') AS noms_stands, GROUP_CONCAT(s.id ORDER BY a.stand_id SEPARATOR ', ') AS ids_stands, GROUP_CONCAT(per.nom ORDER BY a.stand_id SEPARATOR ', ') AS noms_permissions FROM utilisateurs u JOIN privileges p ON u.privilege_id = p.id LEFT JOIN affectations a ON u.id = a.utilisateur_id LEFT JOIN stands s ON a.stand_id = s.id LEFT JOIN permissions per ON a.permission_id = per.id WHERE u.id = ? GROUP BY u.id, u.nom, u.prenom, u.login", [updatedUser.id]);
+            const benevole = dataBenevole[0];
+            tokens = generateTokens(benevole, newUuid)
+        } else {
+            tokens = generateTokens(updatedUser, newUuid)
+        }
+
+        const [update_session_row] = await mySqlPool.query('UPDATE sessions SET uuid = ? WHERE utilisateur_id = ? AND uuid = ?', [newUuid, id, oldUuid]);
+
+        if (update_session_row.affectedRows === 0) {
+            return res.status(500).json({message: "Utilisateur ou session introuvables."})
+        }
+
+        res.cookie('refreshToken', tokens.refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production'
+        });
+
+        return res.status(200).json({message: "Votre profil a été modifié avec succés.", token: {token: tokens.accessToken}});
+    } catch (error) {
+        console.error("Erreur lors de la connexion :", error);
+        return res.status(500).json({ message: "Erreur interne du serveur." });
+    }
+}
+
+const verifyUserUpdate = async (id_user, username) => {
+    const resultUser = await mySqlPool.query('SELECT * FROM utilisateurs WHERE login = ?', [username])
+    const user = resultUser[0][0]
+    if (user) {
+        return id_user !== user.id;
+    }
+    return false
+}
+
+export const getNewAccessToken = async (req, res) => {
+    const refreshToken = req.cookies.refreshToken;
+
+    console.log("dans le getNewAccessToken")
+
+    if (!refreshToken) {
+        return res.status(504).json({message: 'Refresh token is required'});
+    }
+
+    try {
+        const payload = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+
+        const [row] = await mySqlPool.query("SELECT * FROM sessions WHERE utilisateur_id = ? AND uuid = ?", [payload.id, payload.uuid]);
+
+        if (row.length === 0) {
+            return res.status(404).json({message: "Session non trouvée."});
+        }
+
+        payload.exp = payload.exp - (Date.now() / 1000);
+
+        const newUuid = uuidv4();
+        const oldUuid = payload.uuid;
+
+        console.log("payload dans le getNewAccessToken")
+        console.log(payload)
+
+        const newAccessToken = jwt.sign({id: payload.id, login: payload.login, nom: payload.nom, prenom: payload.prenom, role: payload.role, noms_stands: payload.noms_stands, noms_permissions: payload.noms_permissions}, process.env.ACCESS_TOKEN_SECRET, {expiresIn: process.env.ACCESS_TOKEN_EXPIRATION})
+        const newRefreshToken = jwt.sign({id: payload.id, uuid: newUuid, login: payload.login, nom: payload.nom, prenom: payload.prenom, role: payload.role, noms_stands: payload.noms_stands, noms_permissions: payload.noms_permissions}, process.env.REFRESH_TOKEN_SECRET, {expiresIn: `${payload.exp}s`});
+
+        const [update_session_row] = await mySqlPool.query('UPDATE sessions SET uuid = ? WHERE utilisateur_id = ? AND uuid = ?', [newUuid, payload.id, oldUuid]);
+
+        if (update_session_row.affectedRows === 0) {
+            return res.status(500).json({message: "Utilisateur ou session introuvables."})
+        }
+
+        res.cookie('refreshToken', newRefreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production'
+        })
+
+        res.json({token: newAccessToken});
+    } catch (error) {
+        const payload = jwt.decode(refreshToken);
+
+        if (payload) {
+            await mySqlPool.query("DELETE FROM sessions WHERE utilisateur_id = ? AND uuid = ?", [payload.id, payload.uuid]);
+        }
+
+        console.error(error)
+        res.clearCookie('refreshToken', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+        })
+        res.status(504).json({error: 'Invalid or expired refresh token'});
+    }
+}

@@ -11,6 +11,12 @@ import routerStands from "./routes/react/admin/stands.js";
 import routerFestivaliers from "./routes/react/admin/festivaliers.js";
 import routerBenevoles from "./routes/react/admin/benevoles.js";
 import routerCategories from "./routes/react/admin/categories.js";
+import routerTransactions from "./routes/react/admin/transactions.js";
+import routerCards from "./routes/react/admin/cards.js";
+import routerPhones from "./routes/react/admin/phones.js";
+import routerMarques from "./routes/react/admin/marques.js";
+import routerTerminals from "./routes/react/admin/terminals.js";
+import routerStatistics from "./routes/react/admin/statistics.js";
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -24,11 +30,19 @@ app.use(express.json());
 app.use(cookieParser());
 
 app.use('/api/auth', routerReact);
+
+app.use('/api/android', routerAndroid);
+
+app.use('/api/admin/cards', routerCards);
+app.use('/api/admin/phones', routerPhones);
 app.use('/api/admin/stands', routerStands);
-app.use('/api/admin/festivaliers', routerFestivaliers);
+app.use('/api/admin/marques', routerMarques);
+app.use('/api/admin/terminals', routerTerminals);
 app.use('/api/admin/benevoles', routerBenevoles);
 app.use('/api/admin/categories', routerCategories);
-app.use('/api/android', routerAndroid);
+app.use('/api/admin/statistics', routerStatistics);
+app.use('/api/admin/transactions', routerTransactions);
+app.use('/api/admin/festivaliers', routerFestivaliers);
 
 app.get('/', (req, res) => {
     res.json({message: 'Cashless'})
