@@ -62,7 +62,6 @@ export const debiter = async (req, res) => {
 
     console.log("dans debiter")
 
-
     if (!carte) {
         console.log("dans la carte non trouvée debiter")
         res.statusMessage = "Carte non trouvée";
@@ -75,7 +74,7 @@ export const debiter = async (req, res) => {
         return res.status(401).end();
     }
 
-    if (carte.montant <= amount) {
+    if (carte.montant < amount) {
         console.log("Dans montant insuffisant");
         res.statusMessage = "Montant insuffisant.";
         return res.status(401).end();
