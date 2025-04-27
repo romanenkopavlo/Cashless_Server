@@ -62,7 +62,6 @@ export const debiter = async (req, res) => {
 
     console.log("dans debiter")
 
-
     if (!carte) {
         console.log("dans la carte non trouvée debiter")
         res.statusMessage = "Carte non trouvée";
